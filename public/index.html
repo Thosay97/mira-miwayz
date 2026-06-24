@@ -26,6 +26,42 @@ canvas{position:fixed;inset:0}
 #bgCanvas{z-index:0}
 #particleCanvas{z-index:1;pointer-events:none}
 
+/* ── CUSTOM CURSOR ── */
+*{cursor:none!important}
+#cursor{
+  position:fixed;z-index:9999;pointer-events:none;
+  width:12px;height:12px;
+  border-radius:50%;
+  background:rgba(247,147,30,.9);
+  box-shadow:0 0 10px rgba(247,147,30,.8),0 0 20px rgba(247,147,30,.4);
+  transform:translate(-50%,-50%);
+  transition:width .15s,height .15s,background .2s,box-shadow .2s;
+  mix-blend-mode:screen;
+}
+#cursor.clicking{
+  width:6px;height:6px;
+  background:rgba(12,166,213,.9);
+  box-shadow:0 0 14px rgba(12,166,213,.9);
+}
+#cursor.hovering{
+  width:20px;height:20px;
+  background:rgba(247,147,30,.3);
+  box-shadow:0 0 20px rgba(247,147,30,.6),0 0 40px rgba(247,147,30,.2);
+}
+#cursorTrail{
+  position:fixed;z-index:9998;pointer-events:none;
+}
+.trail-dot{
+  position:absolute;border-radius:50%;
+  background:rgba(247,147,30,.4);
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+
+/* ── ORB HOVER GLOW ── */
+#orbWrap{transition:filter .3s}
+#orbWrap:hover{filter:drop-shadow(0 0 20px rgba(247,147,30,.5)) drop-shadow(0 0 40px rgba(12,166,213,.3))}
+
 
 
 /* ── SCANLINE ── */
@@ -317,6 +353,10 @@ canvas{position:fixed;inset:0}
 </style>
 </head>
 <body class="dark">
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+<canvas id="cursorTrail" style="position:fixed;inset:0;z-index:9998;pointer-events:none"></canvas>
 
 <!-- INTRO SCREEN -->
 <div id="introScreen">
@@ -1183,8 +1223,9 @@ function onDrag(e){
   if(!dragState)return;
   const w=document.getElementById(dragState.id);
   const dx=e.clientX-dragState.startX, dy=e.clientY-dragState.startY;
-  const newX=Math.max(0,Math.min(window.innerWidth-w.offsetWidth, dragState.origX+dx));
-  const newY=Math.max(38,Math.min(window.innerHeight-60, dragState.origY+dy));
+  // Allow dragging anywhere -- just keep header visible
+  const newX=Math.max(-w.offsetWidth+60, dragState.origX+dx);
+  const newY=Math.max(38, dragState.origY+dy);
   w.style.left=newX+'px'; w.style.top=newY+'px';
 }
 function stopDrag(){
@@ -1287,6 +1328,92 @@ document.addEventListener('click',e=>{
     modal.classList.remove('open');
   }
 });
+
+/* ── CUSTOM CURSOR ── */
+(function(){
+  const cursor = document.getElementById('cursor');
+  const trailCanvas = document.getElementById('cursorTrail');
+  const tctx = trailCanvas.getContext('2d');
+  let mx=0,my=0,cx=0,cy=0;
+  let trail=[];
+  const TRAIL_LEN=12;
+
+  function resize(){
+    trailCanvas.width=window.innerWidth;
+    trailCanvas.height=window.innerHeight;
+  }
+  resize();
+  window.addEventListener('resize',resize);
+
+  document.addEventListener('mousemove',e=>{
+    mx=e.clientX;my=e.clientY;
+    trail.push({x:mx,y:my,age:0});
+    if(trail.length>TRAIL_LEN) trail.shift();
+  });
+
+  document.addEventListener('mousedown',()=>cursor.classList.add('clicking'));
+  document.addEventListener('mouseup',()=>cursor.classList.remove('clicking'));
+
+  // Hover detection for interactive elements
+  document.addEventListener('mouseover',e=>{
+    const t=e.target;
+    if(t.tagName==='BUTTON'||t.closest('button')||t.closest('.widget-header')||t.closest('#orbWrap')){
+      cursor.classList.add('hovering');
+    }
+  });
+  document.addEventListener('mouseout',e=>{
+    const t=e.target;
+    if(t.tagName==='BUTTON'||t.closest('button')||t.closest('.widget-header')||t.closest('#orbWrap')){
+      cursor.classList.remove('hovering');
+    }
+  });
+
+  // Smooth cursor follow
+  function animateCursor(){
+    // Lerp cursor position
+    cx+=(mx-cx)*.18;
+    cy+=(my-cy)*.18;
+    cursor.style.left=cx+'px';
+    cursor.style.top=cy+'px';
+
+    // Draw trail
+    tctx.clearRect(0,0,trailCanvas.width,trailCanvas.height);
+    trail.forEach((p,i)=>{
+      const alpha=(i/TRAIL_LEN)*0.35;
+      const size=((i/TRAIL_LEN)*4)+1;
+      tctx.beginPath();
+      tctx.arc(p.x,p.y,size,0,Math.PI*2);
+      tctx.fillStyle=`rgba(247,147,30,${alpha})`;
+      tctx.fill();
+    });
+
+    // Age trail points
+    trail.forEach(p=>p.age++);
+    trail=trail.filter(p=>p.age<TRAIL_LEN);
+
+    requestAnimationFrame(animateCursor);
+  }
+  animateCursor();
+
+  /* ── ORB HOVER GLOW ── */
+  const orbWrap=document.getElementById('orbWrap');
+  if(orbWrap){
+    orbWrap.addEventListener('mouseenter',()=>{
+      orbWrap.style.filter='drop-shadow(0 0 30px rgba(247,147,30,.7)) drop-shadow(0 0 60px rgba(12,166,213,.4))';
+      cursor.style.width='28px';
+      cursor.style.height='28px';
+      cursor.style.background='rgba(247,147,30,.2)';
+      cursor.style.boxShadow='0 0 30px rgba(247,147,30,.6),0 0 60px rgba(247,147,30,.2)';
+    });
+    orbWrap.addEventListener('mouseleave',()=>{
+      orbWrap.style.filter='';
+      cursor.style.width='';
+      cursor.style.height='';
+      cursor.style.background='';
+      cursor.style.boxShadow='';
+    });
+  }
+})();
 
 /* ── MS TEAMS INTEGRATION ── */
 function showTeamsMenu(){
