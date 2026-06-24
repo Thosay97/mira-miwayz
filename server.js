@@ -829,14 +829,10 @@ app.get('/api/standup', async (req, res) => {
 
     // Build text summary for MIRA to speak
     const gtmDays = Math.max(0, Math.ceil((new Date('2026-07-12') - new Date()) / 86400000));
-    let summary = `Sprint ${sprint.name} Standup. ${gtmDays} days to GTM.
-
-`;
-    for (const [sq, data] of Object.entries(standup)) {
-      summary += `${sq}: ${data.done.length} done, ${data.inProgress.length} in progress, ${data.blocked.length} blocked. `;
-      if (data.updatedYesterday.length > 0) summary += `${data.updatedYesterday.length} tickets updated yesterday. `;
-      summary += '
-';
+    let summary = 'Sprint ' + sprint.name + ' Standup. ' + gtmDays + ' days to GTM. ';
+    for (const [sq, sqData] of Object.entries(standup)) {
+      summary += sq + ': ' + sqData.done.length + ' done, ' + sqData.inProgress.length + ' in progress, ' + sqData.blocked.length + ' blocked. ';
+      if (sqData.updatedYesterday.length > 0) summary += sqData.updatedYesterday.length + ' tickets updated yesterday. ';
     }
 
     res.json({ sprint: sprint.name, gtmDays, standup, summary, generatedAt: new Date().toISOString() });
