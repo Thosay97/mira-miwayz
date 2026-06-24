@@ -53,16 +53,28 @@ canvas{position:fixed;inset:0}
   #sClock { font-size:10px; }
   #mcpToggle { font-size:7px; padding:2px 6px; }
 
-  /* Main stage -- let it stay fullscreen but use margin to center orb */
+  /* Mobile orb -- absolutely positioned, immune to keyboard resize */
   #orbWrap {
+    position:fixed!important;
     width:200px!important;
     height:200px!important;
-    position:relative!important;
+    left:50%!important;
+    top:50%!important;
+    transform:translate(-50%, -55%)!important;
+    z-index:22!important;
     flex-shrink:0!important;
-    /* Push down from top to clear status bar, push up to clear cards */
-    margin-top:-160px!important;
+    margin:0!important;
   }
   #orbCanvas { width:200px!important; height:200px!important; }
+  #centerVoid {
+    position:absolute!important;
+    top:0!important; left:0!important;
+    right:0!important; bottom:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:center!important;
+    justify-content:center!important;
+  }
   #miraText { font-size:14px; letter-spacing:4px; }
   #miraSubText { font-size:6px; letter-spacing:2px; }
   #orbStatusText { font-size:8px; }
@@ -934,7 +946,8 @@ canvas{position:fixed;inset:0}
 function playActivationSound(){
   try{
     const AC=new(window.AudioContext||window.webkitAudioContext)();
-    AC.resume();
+    // iOS requires resume() after user gesture
+    AC.resume().then(()=>{}).catch(()=>{});
     function tone(f,s,d,v=0.25,t='sine'){
       const o=AC.createOscillator(),g=AC.createGain();
       o.connect(g);g.connect(AC.destination);
@@ -997,6 +1010,19 @@ const bootSteps=[
 ];
 
 function startActivation(){
+  // iOS -- unlock audio context on first user gesture
+  try{
+    const tmpAC = new(window.AudioContext||window.webkitAudioContext)();
+    tmpAC.resume().then(()=>tmpAC.close());
+  }catch(e){}
+  // iOS -- unlock speech synthesis on first user gesture  
+  if('speechSynthesis' in window){
+    const unlock = new SpeechSynthesisUtterance('');
+    unlock.volume = 0;
+    speechSynthesis.speak(unlock);
+    speechSynthesis.cancel();
+  }
+
   playActivationSound();
   const intro=document.getElementById('introScreen');
   const overlay=document.getElementById('activationOverlay');
@@ -1049,11 +1075,22 @@ function revealMainUI(){
   setTimeout(()=>scheduleDailyBriefing(), 2000);
   setTimeout(()=>{document.getElementById('chatTray').classList.add('on');document.getElementById('chatOut').classList.add('on');document.getElementById('ticker').classList.add('on');},600);
 
-  fetchJira().then(()=>{
-    const days=Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5));
-    const msg=`Hello! I'm MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have ${days} days until the Colombo GTM launch. How can I help you today?`;
-    setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(msg),200);},1000);
-  });
+  // Pre-build greeting message immediately while still in tap gesture context
+  const days=Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5));
+  const greetingMsg=`Hello! I'm MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have ${days} days until the Colombo GTM launch. How can I help you today?`;
+
+  // On iOS -- start audio immediately in tap context, then fetch Jira in background
+  if(typeof isMobile!=='undefined'&&isMobile){
+    setTimeout(()=>{
+      addMsg('ai','');
+      setTimeout(()=>speakAndDisplay(greetingMsg),300);
+    },1200);
+    fetchJira(); // fire and forget -- updates HUD when done
+  } else {
+    fetchJira().then(()=>{
+      setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(greetingMsg),200);},1000);
+    });
+  }
 }
 
 /* ── BACKGROUND ── */
@@ -1229,12 +1266,21 @@ async function speakWithElevenLabs(text,onWordCb){
 
 function speakBrowser(text,onWordCb){
   if(!('speechSynthesis' in window))return;
+  speechSynthesis.cancel();
   const u=new SpeechSynthesisUtterance(text);
-  u.rate=0.92;u.pitch=1.05;u.volume=0.9;
+  u.rate=0.92;u.pitch=1.05;u.volume=1.0;
   if(onWordCb){u.onboundary=e=>{if(e.name==='word')onWordCb(text.substring(e.charIndex,e.charIndex+e.charLength));};}
-  const vs=speechSynthesis.getVoices();
-  const v=vs.find(v=>v.name.includes('Samantha'))||vs.find(v=>v.name.includes('Karen'));
-  if(v)u.voice=v;speechSynthesis.speak(u);
+  function doSpeak(){
+    const vs=speechSynthesis.getVoices();
+    const v=vs.find(v=>v.name==='Samantha')||
+            vs.find(v=>v.name.includes('Karen'))||
+            vs.find(v=>v.lang==='en-US'&&v.localService)||
+            vs.find(v=>v.lang.startsWith('en'));
+    if(v)u.voice=v;
+    speechSynthesis.speak(u);
+  }
+  if(speechSynthesis.getVoices().length>0){doSpeak();}
+  else{speechSynthesis.onvoiceschanged=()=>{speechSynthesis.onvoiceschanged=null;doSpeak();};}
 }
 
 function speakAndDisplay(text){
@@ -2202,6 +2248,9 @@ async function send(){
     addMsg('ai','');setTimeout(()=>speakAndDisplay(reply),100);
   }catch(e){addMsg('ai','Connection error. Make sure the server is running on port 3001 and Ollama is active.');}
   orbState='active';document.getElementById('orbStatusText').textContent='ONLINE';
+  // iOS -- blur input to close keyboard after sending
+  if(isMobile) document.getElementById('sinp')?.blur();
+}nt='ONLINE';
 }
 
 /* ── MOBILE DETECTION ── */
