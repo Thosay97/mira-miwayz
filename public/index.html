@@ -53,163 +53,115 @@ canvas{position:fixed;inset:0}
   #sClock { font-size:10px; }
   #mcpToggle { font-size:7px; padding:2px 6px; }
 
-  /* Mobile orb -- absolutely positioned, immune to keyboard resize */
+  /* Mobile orb -- fixed center, immune to keyboard */
   #orbWrap {
     position:fixed!important;
-    width:200px!important;
-    height:200px!important;
-    left:50%!important;
-    top:50%!important;
-    transform:translate(-50%, -55%)!important;
-    z-index:22!important;
-    flex-shrink:0!important;
-    margin:0!important;
+    width:190px!important; height:190px!important;
+    left:50%!important; top:calc(44px + (100dvh - 44px - 300px) / 2)!important;
+    transform:translateX(-50%)!important;
+    z-index:22!important; margin:0!important;
   }
-  #orbCanvas { width:200px!important; height:200px!important; }
+  #orbCanvas { width:190px!important; height:190px!important; }
   #centerVoid {
-    position:absolute!important;
-    top:0!important; left:0!important;
-    right:0!important; bottom:0!important;
-    display:flex!important;
-    flex-direction:column!important;
-    align-items:center!important;
-    justify-content:center!important;
+    position:absolute!important; inset:0!important;
+    display:flex!important; flex-direction:column!important;
+    align-items:center!important; justify-content:center!important;
   }
-  #miraText { font-size:14px; letter-spacing:4px; }
-  #miraSubText { font-size:6px; letter-spacing:2px; }
-  #orbStatusText { font-size:8px; }
 
-  /* Mobile dashboard cards -- horizontal scroll strip */
-  #mobileDash {
-    position:fixed; bottom:148px; left:0; right:0; z-index:25;
-    display:flex; gap:8px; padding:0 12px;
-    overflow-x:auto; overflow-y:hidden;
-    scroll-snap-type:x mandatory;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:none;
-  }
-  #mobileDash::-webkit-scrollbar { display:none; }
-  #mobileDash.hidden { display:none; }
+  /* Desktop panels -- hide all */
+  .dring, #circSVG, #hexSVG, #widgetDock,
+  #addWidgetBtn, #addWidgetModal,
+  .hud-widget, #pTop, #themeToggle,
+  .hud-panel { display:none!important; }
 
-  .mobile-card {
-    flex-shrink:0; scroll-snap-align:start;
-    background:rgba(2,6,16,.92);
-    border:1px solid rgba(247,147,30,.2);
-    border-radius:12px; padding:12px 14px;
-    min-width:150px; max-width:170px;
-    cursor:pointer; transition:all .2s;
-    backdrop-filter:blur(12px);
-    position:relative; overflow:hidden;
-  }
-  .mobile-card::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
-    background:linear-gradient(90deg,var(--orange),var(--blue));
-  }
-  .mobile-card:active { transform:scale(.97); background:rgba(247,147,30,.08); }
-  .mc-label { font-size:7px; color:rgba(247,147,30,.55); letter-spacing:2px; text-transform:uppercase; margin-bottom:6px; }
-  .mc-val { font-family:'Orbitron',monospace; font-size:26px; color:var(--orange); line-height:1; }
-  .mc-sub { font-size:7px; color:var(--text-dim); letter-spacing:1px; margin-top:3px; }
-  .mc-bars { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
-  .mc-bar-row { display:flex; align-items:center; gap:5px; }
-  .mc-bar-lbl { font-size:7px; color:var(--text-dim); width:28px; }
-  .mc-bar-track { flex:1; height:5px; background:rgba(0,12,28,.9); border-radius:3px; overflow:hidden; }
-  .mc-bar-fill { height:100%; border-radius:3px; transition:width 1.2s ease; }
-  .mc-bar-val { font-size:7px; color:var(--blue); width:22px; text-align:right; }
+  /* Status bar */
+  #statusBar { height:44px; padding:0 10px; gap:6px; }
+  .s-brand { font-size:9px; letter-spacing:2px; }
+  .s-pill { font-size:7px; padding:2px 5px; }
+  #sClock { font-size:9px; }
+  #mcpToggle { font-size:7px; padding:2px 6px; }
 
-  /* Bottom sheet overlay */
-  #mobileSheet {
-    position:fixed; inset:0; z-index:60;
-    background:rgba(0,0,0,.7);
-    display:none; align-items:flex-end;
-    backdrop-filter:blur(4px);
-  }
-  #mobileSheet.open { display:flex; }
-  #mobileSheetContent {
-    width:100%; max-height:75vh;
-    background:rgba(2,6,16,.98);
-    border-top:1px solid rgba(247,147,30,.3);
-    border-radius:20px 20px 0 0;
-    padding:0 0 env(safe-area-inset-bottom) 0;
-    overflow:hidden;
-    animation:slideUp .3s cubic-bezier(.34,1.2,.64,1);
-  }
-  @keyframes slideUp {
-    from { transform:translateY(100%); }
-    to { transform:translateY(0); }
-  }
-  .sheet-handle {
-    width:36px; height:4px; background:rgba(247,147,30,.3);
-    border-radius:2px; margin:10px auto 0;
-  }
-  .sheet-header {
-    display:flex; align-items:center; justify-content:space-between;
-    padding:12px 16px 8px;
-    border-bottom:1px solid rgba(247,147,30,.1);
-  }
-  .sheet-title { font-size:11px; color:var(--orange); letter-spacing:2.5px; text-transform:uppercase; font-weight:600; }
-  .sheet-close { font-size:18px; color:rgba(247,147,30,.4); cursor:pointer; padding:4px; }
-  .sheet-body { padding:14px 16px; overflow-y:auto; max-height:60vh; }
+  /* Stage -- full screen behind everything */
+  #stage { display:none!important; }
 
-  /* Chat area -- mobile */
-  #chatOut {
-    bottom:88px; left:12px; right:12px;
-    max-height:70px; font-size:11px;
-  }
+  /* Chat tray -- pinned to bottom with safe area */
   #chatTray {
-    padding:8px 10px;
-    padding-bottom:max(8px, env(safe-area-inset-bottom));
-    gap:5px;
-    flex-wrap:nowrap;
-    align-items:center;
+    position:fixed!important;
+    bottom:0!important; left:0!important; right:0!important;
+    height:60px!important;
+    padding:8px 10px!important;
+    padding-bottom:max(8px, env(safe-area-inset-bottom))!important;
+    gap:5px!important;
+    display:flex!important;
+    align-items:center!important;
+    background:rgba(2,5,12,.98)!important;
+    border-top:1px solid rgba(247,147,30,.15)!important;
+    z-index:40!important;
+    transform:none!important;
+    opacity:1!important;
+    pointer-events:all!important;
   }
   .sinp {
-    font-size:13px;
-    padding:7px 8px;
-    min-width:0;
-    flex:1;
+    font-size:13px!important; padding:7px 8px!important;
+    min-width:0!important; flex:1!important;
   }
   .sbtn {
-    font-size:9px;
-    padding:7px 8px;
-    letter-spacing:.8px;
-    white-space:nowrap;
-    flex-shrink:0;
+    font-size:9px!important; padding:7px 7px!important;
+    letter-spacing:.5px!important; white-space:nowrap!important;
+    flex-shrink:0!important;
   }
-  #micB { padding:7px 10px; flex-shrink:0; }
-  #teamsBtn { padding:7px 8px; font-size:9px; letter-spacing:.8px; }
+  #micB { padding:7px 10px!important; flex-shrink:0!important; }
+  #teamsBtn { padding:7px 7px!important; font-size:8px!important; letter-spacing:.5px!important; }
 
-  /* Waveform */
-  #wvWrap { bottom:96px; }
+  /* Chat output -- above tray */
+  #chatOut {
+    position:fixed!important;
+    bottom:60px!important; left:10px!important; right:10px!important;
+    max-height:60px!important; font-size:11px!important;
+    z-index:39!important;
+  }
 
-  /* Ticker */
-  #ticker { bottom:90px; font-size:7px; display:none; }
+  /* Waveform -- above chat */
+  #wvWrap { bottom:68px!important; }
+  #ticker { display:none!important; }
 
-  /* Scan line */
-  .scanline { display:none; }
-
-  /* Mobile action row -- quick buttons above chat */
+  /* Mobile action row -- above card strip */
   #mobileActions {
-    position:fixed; bottom:260px; left:12px; right:12px; z-index:28;
-    display:flex; gap:5px; justify-content:center;
-    flex-wrap:nowrap;
+    position:fixed!important;
+    bottom:242px!important; left:10px!important; right:10px!important;
+    z-index:28!important;
+    display:flex!important; gap:5px!important; justify-content:center!important;
+    flex-wrap:nowrap!important;
   }
   .mob-action {
-    font-size:8px;
-    padding:5px 8px;
-    letter-spacing:.8px;
-    flex-shrink:0;
+    font-size:8px!important; padding:4px 8px!important;
+    letter-spacing:.5px!important; flex-shrink:0!important;
   }
-  .mob-action {
-    background:rgba(2,6,16,.9); border:1px solid rgba(247,147,30,.2);
-    border-radius:20px; padding:5px 12px;
-    font-size:8px; color:rgba(247,147,30,.7);
-    font-family:'Share Tech Mono',monospace; letter-spacing:1.5px;
-    cursor:pointer; transition:all .2s;
-    display:flex; align-items:center; gap:5px;
+
+  /* Mobile dashboard cards -- fixed strip above action row */
+  #mobileDash {
+    position:fixed!important;
+    bottom:60px!important; left:0!important; right:0!important;
+    height:170px!important;
+    z-index:25!important;
+    display:flex!important; gap:8px!important; padding:6px 12px!important;
+    align-items:stretch!important;
+    overflow-x:auto!important; overflow-y:hidden!important;
+    scroll-snap-type:x mandatory!important;
+    -webkit-overflow-scrolling:touch!important;
+    scrollbar-width:none!important;
+    background:rgba(2,5,12,.9)!important;
+    border-top:1px solid rgba(247,147,30,.1)!important;
   }
-  .mob-action:active { background:rgba(247,147,30,.1); }
-  .mob-action.teams-btn { color:rgba(100,140,255,.7); border-color:rgba(100,140,255,.2); }
-}
+  #mobileDash::-webkit-scrollbar { display:none!important; }
+  .mobile-card {
+    flex-shrink:0!important; scroll-snap-align:start!important;
+    min-width:145px!important; max-width:155px!important;
+    height:auto!important;
+  }
+
+  /* Bottom sheet */
+  #mobileSheet { position:fixed!important; inset:0!important; z-index:60!important; }
 
 /* ── PWA INSTALL BANNER ── */
 #pwaInstall{
@@ -1023,8 +975,19 @@ function startActivation(){
     speechSynthesis.cancel();
   }
 
+  // Unlock Web Audio immediately in tap context
+  try{
+    var tapAC = new(window.AudioContext||window.webkitAudioContext)();
+    var buf = tapAC.createBuffer(1,1,22050);
+    var src = tapAC.createBufferSource();
+    src.buffer = buf;
+    src.connect(tapAC.destination);
+    src.start(0);
+    tapAC.resume();
+  }catch(e){}
+
   playActivationSound();
-  const intro=document.getElementById('introScreen');
+  var intro=document.getElementById('introScreen');
   const overlay=document.getElementById('activationOverlay');
   const bar=document.getElementById('actBar');
   const log=document.getElementById('actLog');
@@ -1079,13 +1042,22 @@ function revealMainUI(){
   const days=Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5));
   const greetingMsg='Hello! I am MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have '+days+' days until the Colombo GTM launch. How can I help you today?';
 
-  // On iOS -- start audio immediately in tap context, then fetch Jira in background
+  // On iOS -- pre-unlock audio element in tap context, then speak after boot
   if(typeof isMobile!=='undefined'&&isMobile){
+    // Create and unlock a silent audio element NOW while in gesture context
+    var iosAudioUnlock = new Audio();
+    iosAudioUnlock.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+    iosAudioUnlock.volume = 0.01;
+    iosAudioUnlock.play().then(()=>{
+      iosAudioUnlock.pause();
+      console.log('iOS audio unlocked');
+    }).catch(e=>console.log('iOS audio unlock failed:',e));
+
+    fetchJira(); // background
     setTimeout(()=>{
       addMsg('ai','');
-      setTimeout(()=>speakAndDisplay(greetingMsg),300);
-    },1200);
-    fetchJira(); // fire and forget -- updates HUD when done
+      setTimeout(()=>speakAndDisplay(greetingMsg), 400);
+    }, 1400);
   } else {
     fetchJira().then(()=>{
       setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(greetingMsg),200);},1000);
@@ -1248,7 +1220,14 @@ async function speakWithElevenLabs(text,onWordCb){
     if(arrayBuf.byteLength<1000){console.error('Audio too small, falling back');speakBrowser(text,onWordCb);return;}
     const blob=new Blob([arrayBuf],{type:'audio/mpeg'});
     const url=URL.createObjectURL(blob);
-    currentAudio=new Audio(url);
+    // On iOS reuse the pre-unlocked audio element if available
+    if(typeof iosAudioUnlock!=='undefined' && iosAudioUnlock){
+      currentAudio = iosAudioUnlock;
+      currentAudio.src = url;
+      iosAudioUnlock = null;
+    } else {
+      currentAudio=new Audio(url);
+    }
     currentAudio.addEventListener('canplaythrough',()=>{
       console.log('Audio ready, duration:',currentAudio.duration,'s');
       const dur=currentAudio.duration*1000;
