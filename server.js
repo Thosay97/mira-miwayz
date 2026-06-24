@@ -113,7 +113,9 @@ app.get('/api/jira', async (req, res) => {
     }
     const sprint = sprintData.values[0];
     const sprintId = sprint.id;
+    const sprintGoal = sprint.goal || '';
     console.log(`Active sprint: ${sprint.name} (ID: ${sprintId})`);
+    if(sprintGoal) console.log(`Sprint goal: ${sprintGoal}`);
 
     // Step 3: Fetch all sprint issues (same as Chathura's fetchAllSprintIssues)
     const fields = 'summary,status,issuetype,priority,assignee,parent,statuscategorychangedate,created';
@@ -128,79 +130,78 @@ app.get('/api/jira', async (req, res) => {
     }
     console.log(`Fetched ${allIssues.length} issues from sprint ${sprint.name}`);
 
-    // Step 3b: Child task / subtask fallback
-    // MiWayz uses "Child Task" issue type (not classic Sub-task)
-    // These don't always appear in the board sprint filter so we fetch by parent
+    // Step 3b: Smart child/subtask detection
+    // Parent types: Story, Bug, Task, UI -- everything else is treated as a child item
+    const PARENT_TYPES = ['story','bug','task','ui','epic','feature','improvement'];
+
+    function isParentType(issue) {
+      const itype = (issue.fields?.issuetype?.name || '').toLowerCase();
+      // Explicitly known child types
+      if (itype.includes('sub-task') || itype.includes('subtask') || itype.includes('child')) return false;
+      // Known parent types
+      if (PARENT_TYPES.some(t => itype === t || itype.includes(t))) return true;
+      // Has a parent field set = it's a child
+      if (issue.fields?.parent) return false;
+      // Default: treat as parent if we're not sure
+      return true;
+    }
+
     try {
       const have = new Set(allIssues.map(i => i.key));
 
-      // Get all parent issue keys (stories, tasks, bugs -- non-child issues)
-      const parentKeys = allIssues
-        .filter(i => {
-          const itype = (i.fields?.issuetype?.name || '').toLowerCase();
-          return !itype.includes('sub-task') && !itype.includes('subtask') && !itype.includes('child');
-        })
-        .map(i => i.key);
+      // Strategy 1: Fetch by parent key for all known parent issues
+      const parentKeys = allIssues.filter(i => isParentType(i)).map(i => i.key);
+      console.log(`Found ${parentKeys.length} parent issues, fetching children...`);
 
-      console.log(`Fetching child tasks for ${parentKeys.length} parent issues...`);
-
-      if (parentKeys.length > 0) {
-        // Batch in groups of 40 to stay within JQL limits
-        const batchSize = 40;
-        for (let b = 0; b < parentKeys.length; b += batchSize) {
-          const batch = parentKeys.slice(b, b + batchSize);
-          const parentList = batch.join(',');
-
-          // Query 1: Classic Sub-tasks
-          // Query 2: Child Tasks (MiWayz custom issue type)
-          // Query 3: Any issue with parent in this sprint
-          const jql = encodeURIComponent(
-            `parent in (${parentList}) AND sprint = ${sprintId}`
-          );
-
-          try {
-            const childData = await jiraGet(
-              `/rest/api/3/search/jql?jql=${jql}&maxResults=100&fields=${fields}`
-            );
-            let added = 0;
-            for (const child of (childData.issues || [])) {
-              if (!have.has(child.key)) {
-                allIssues.push(child);
-                have.add(child.key);
-                added++;
-              }
-            }
-            if (added > 0) console.log(`Child task fallback: added ${added} from batch ${b/batchSize + 1}`);
-          } catch(e) {
-            console.warn(`Child batch ${b/batchSize + 1} failed:`, e.message);
-          }
-        }
-
-        // Also try a direct sprint + issuetype query as backup
+      const batchSize = 40;
+      for (let b = 0; b < parentKeys.length; b += batchSize) {
+        const batch = parentKeys.slice(b, b + batchSize);
+        const jql = encodeURIComponent(`parent in (${batch.join(',')}) AND sprint = ${sprintId}`);
         try {
-          const childTypeJql = encodeURIComponent(
-            `sprint = ${sprintId} AND issuetype in ("Child Task", "Sub-task", "Subtask")`
-          );
-          const childTypeData = await jiraGet(
-            `/rest/api/3/search/jql?jql=${childTypeJql}&maxResults=200&fields=${fields}`
-          );
+          const childData = await jiraGet(`/rest/api/3/search/jql?jql=${jql}&maxResults=100&fields=${fields}`);
           let added = 0;
-          for (const child of (childTypeData.issues || [])) {
+          for (const child of (childData.issues || [])) {
             if (!have.has(child.key)) {
+              // Mark as subtask regardless of its issuetype name
+              if (!child.fields) child.fields = {};
+              if (!child.fields.issuetype) child.fields.issuetype = {};
+              child.fields.issuetype._isChild = true;
               allIssues.push(child);
               have.add(child.key);
               added++;
             }
           }
-          if (added > 0) console.log(`issuetype fallback: added ${added} child/sub-tasks`);
-        } catch(e) {
-          console.warn('issuetype fallback failed:', e.message);
-        }
+          if (added > 0) console.log(`Children fetched: +${added} from batch ${Math.floor(b/batchSize)+1}`);
+        } catch(e) { console.warn(`Batch ${Math.floor(b/batchSize)+1} failed:`, e.message); }
       }
-    } catch(e) {
-      console.warn('Child task fallback failed:', e.message);
-    }
-    console.log(`Total after child task fallback: ${allIssues.length} issues`);
+
+      // Strategy 2: Catch any remaining by known child issuetype names
+      const knownChildTypes = ['Sub-task','Subtask','Child Task','Child Issue','Sub Task'];
+      const childTypeJql = encodeURIComponent(
+        `sprint = ${sprintId} AND issuetype in (${knownChildTypes.map(t=>'"'+t+'"').join(',')})`
+      );
+      try {
+        const childTypeData = await jiraGet(`/rest/api/3/search/jql?jql=${childTypeJql}&maxResults=200&fields=${fields}`);
+        let added = 0;
+        for (const child of (childTypeData.issues || [])) {
+          if (!have.has(child.key)) { allIssues.push(child); have.add(child.key); added++; }
+        }
+        if (added > 0) console.log(`issuetype sweep: +${added} child issues`);
+      } catch(e) { console.warn('issuetype sweep failed:', e.message); }
+
+      // Strategy 3: Any issue in sprint with a parent field that we might have missed
+      try {
+        const parentedJql = encodeURIComponent(`sprint = ${sprintId} AND "Epic Link" is EMPTY AND parent is not EMPTY`);
+        const parentedData = await jiraGet(`/rest/api/3/search/jql?jql=${parentedJql}&maxResults=200&fields=${fields}`);
+        let added = 0;
+        for (const child of (parentedData.issues || [])) {
+          if (!have.has(child.key)) { allIssues.push(child); have.add(child.key); added++; }
+        }
+        if (added > 0) console.log(`parent-field sweep: +${added} issues`);
+      } catch(e) { /* this JQL may not work on all Jira configs */ }
+
+    } catch(e) { console.warn('Child task detection failed:', e.message); }
+    console.log(`Total after child detection: ${allIssues.length} issues`);
 
     // Step 4: Bucket issues using MiWayz's exact status names (from Chathura's bucketForStatus)
     const counts = { done: 0, codeReview: 0, readyForQA: 0, inQA: 0, inProgress: 0, toDo: 0, blocked: 0, excluded: 0, total: 0 };
@@ -253,6 +254,7 @@ app.get('/api/jira', async (req, res) => {
 
     const result = {
       sprintName: sprint.name,
+      sprintGoal: sprintGoal,
       sprintId,
       boardId,
       gtmDays,
@@ -781,6 +783,7 @@ app.listen(PORT, () => {
 function miraSystem(jira) {
   const liveData = jira && jira.total > 0 ? `
 CURRENT SPRINT DATA (${jira.sprintName || 'Sprint 29'}) — from Jira:
+- Sprint Goal: ${jira.sprintGoal || 'Not set'}
 - Total tickets: ${jira.total}
 - Done: ${jira.done} (${jira.donePercent}%)
 - In Progress: ${jira.inProgress}
