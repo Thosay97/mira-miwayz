@@ -1000,7 +1000,7 @@ function fireFlashRings(){
 }
 
 /* ── BOOT STEPS ── */
-const bootSteps=[
+var bootSteps=[
   [0,   'NEURAL ENGINE LOADING...',    8],
   [350, 'SYNCING MIWAYZ DATABASE...',  25],
   [700, 'CALIBRATING RING SYSTEMS...', 48],
@@ -1077,7 +1077,7 @@ function revealMainUI(){
 
   // Pre-build greeting message immediately while still in tap gesture context
   const days=Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5));
-  const greetingMsg=`Hello! I'm MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have ${days} days until the Colombo GTM launch. How can I help you today?`;
+  const greetingMsg='Hello! I am MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have '+days+' days until the Colombo GTM launch. How can I help you today?';
 
   // On iOS -- start audio immediately in tap context, then fetch Jira in background
   if(typeof isMobile!=='undefined'&&isMobile){
@@ -1130,8 +1130,8 @@ function initBackground(){
 }
 
 /* ── ORB ── */
-let orbState='active',orbAngle=0,pulsePhase=0,scanAngle=0;
-const ORANGE='#F7931E',BLUE='#0CA6D5';
+var orbState='active',orbAngle=0,pulsePhase=0,scanAngle=0;
+var ORANGE='#F7931E',BLUE='#0CA6D5';
 function pc(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return `rgba(${r},${g},${b},${a})`}
 
 function startOrb(){
@@ -1230,7 +1230,7 @@ function updateClock(){
 }
 
 /* ── ELEVENLABS + TYPEWRITER ── */
-let currentAudio=null,displayTimeout=null;
+var currentAudio=null,displayTimeout=null;
 
 async function speakWithElevenLabs(text,onWordCb){
   try{
@@ -1302,7 +1302,7 @@ function speakAndDisplay(text){
 }
 
 /* ── JIRA ── */
-let liveJira=null;
+var liveJira=null;
 async function fetchJira(){
   try{const res=await fetch('/api/jira');if(!res.ok)return;const data=await res.json();if(data.error)return;liveJira=data;updateHUD(data);if(typeof isMobile!=='undefined'&&isMobile)updateMobileCards(data);}catch(e){}
 }
@@ -1387,7 +1387,7 @@ function updateHUD(d){
 setInterval(fetchJira,5*60*1000);
 
 /* ── MIC ── */
-let micOn=false,recog=null;
+var micOn=false,recog=null;
 function toggleMic(){
   const btn=document.getElementById('micB'),wv=document.getElementById('wvWrap');
   if(!micOn){
@@ -1419,7 +1419,7 @@ function addMsg(role,text){
 }
 
 /* ── MCP MODE TOGGLE ── */
-let mcpMode = true; // Claude+Rovo is default
+var mcpMode = true; // Claude+Rovo is default
 function toggleMCP(){
   mcpMode = !mcpMode;
   const btn = document.getElementById('mcpToggle');
@@ -1502,7 +1502,7 @@ document.addEventListener('keydown',e=>{
 /* ── WIDGET SYSTEM ── */
 
 // Default positions
-const WIDGET_DEFAULTS = {
+var WIDGET_DEFAULTS = {
   wGTM:  {x:20,  y:56,  w:220, visible:true},
   wBLK:  {x:null, y:56,  w:220, visible:true},  // null = right-aligned
   wSQ:   {x:20,  y:null, w:220, visible:true},   // null = bottom-aligned
@@ -1573,7 +1573,7 @@ function showWidgets(){
 }
 
 /* ── DRAG ── */
-let dragState=null;
+var dragState=null;
 function startDrag(e,id){
   if(e.target.classList.contains('wc-btn')) return;
   const w=document.getElementById(id);
@@ -1604,7 +1604,7 @@ function stopDrag(){
 }
 
 /* ── RESIZE ── */
-let resizeState=null;
+var resizeState=null;
 function startResize(e,id){
   const w=document.getElementById(id);
   const body=w.querySelector('.widget-body');
@@ -1770,8 +1770,8 @@ document.addEventListener('click',e=>{
 });
 
 /* ── DYNAMIC WIDGET ENGINE ── */
-let dynWidgetCount = 0;
-const CHART_COLORS = ['#F7931E','#0CA6D5','#00ffaa','#ff5544','#a78bfa','#fbbf24','#34d399','#60a5fa'];
+var dynWidgetCount = 0;
+var CHART_COLORS = ['#F7931E','#0CA6D5','#00ffaa','#ff5544','#a78bfa','#fbbf24','#34d399','#60a5fa'];
 
 // Chart.js global defaults
 if(typeof Chart !== 'undefined'){
@@ -2250,11 +2250,10 @@ async function send(){
   orbState='active';document.getElementById('orbStatusText').textContent='ONLINE';
   // iOS -- blur input to close keyboard after sending
   if(isMobile) document.getElementById('sinp')?.blur();
-}nt='ONLINE';
 }
 
 /* ── MOBILE DETECTION ── */
-const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
 
 /* ── MOBILE SHEET ── */
 function openMobileSheet(type){
@@ -2614,7 +2613,7 @@ async function sendToTeams(type, customMsg){
 }
 
 /* Detect Teams voice commands -- injected into existing send flow */
-const teamsKeywords = ['send to teams','post to teams','teams update','send sprint update','send blockers to teams','teams briefing'];
+var teamsKeywords = ['send to teams','post to teams','teams update','send sprint update','send blockers to teams','teams briefing'];
 </script>
 </body>
 </html>
