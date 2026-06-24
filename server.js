@@ -633,6 +633,139 @@ app.post('/api/teams', async (req, res) => {
   }
 });
 
+/* ── DYNAMIC WIDGET: Sprint Comparison ── */
+app.get('/api/sprint/:sprintId', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  async function jiraGet(path) {
+    const r = await fetch(`${base}${path}`, { headers: { 'Authorization': auth, 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(`Jira ${r.status}`);
+    return r.json();
+  }
+  try {
+    const sprintId = req.params.sprintId;
+    const fields = 'summary,status,issuetype,assignee,priority';
+    let issues = [], startAt = 0, total = Infinity;
+    while (startAt < total) {
+      const data = await jiraGet(`/rest/agile/1.0/sprint/${sprintId}/issue?startAt=${startAt}&maxResults=100&fields=${fields}`);
+      total = data.total ?? data.issues.length;
+      issues = issues.concat(data.issues || []);
+      if (!data.issues || data.issues.length === 0) break;
+      startAt += data.issues.length;
+      if (startAt >= total) break;
+    }
+    const counts = { done:0, inProgress:0, inReview:0, blocked:0, toDo:0, total:0 };
+    issues.forEach(i => {
+      const b = bucketForStatus(i.fields?.status?.name||'');
+      if (b === 'excluded') return;
+      counts.total++;
+      if (b === 'done') counts.done++;
+      else if (b === 'inProgress') counts.inProgress++;
+      else if (b === 'codeReview' || b === 'readyForQA' || b === 'inQA') counts.inReview++;
+      else if (b === 'blocked') counts.blocked++;
+      else counts.toDo++;
+    });
+    counts.donePercent = Math.round((counts.done/Math.max(counts.total,1))*100);
+    counts.blockedPercent = Math.round((counts.blocked/Math.max(counts.total,1))*100);
+    res.json({ sprintId, ...counts });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── DYNAMIC WIDGET: Sprint Search by Name ── */
+app.get('/api/sprint/search/:name', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  try {
+    const r = await fetch(`${base}/rest/agile/1.0/board/154/sprint?state=closed,active&maxResults=50`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    });
+    const data = await r.json();
+    const name = req.params.name.toLowerCase();
+    const sprint = (data.values||[]).find(s => s.name.toLowerCase().includes(name));
+    if (!sprint) return res.status(404).json({ error: `Sprint "${req.params.name}" not found` });
+    res.json({ id: sprint.id, name: sprint.name, state: sprint.state });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── DYNAMIC WIDGET: Custom JQL ── */
+app.post('/api/jql', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const { jql, maxResults = 50 } = req.body;
+  if (!jql) return res.status(400).json({ error: 'jql required' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  try {
+    const encoded = encodeURIComponent(jql);
+    const r = await fetch(`${base}/rest/api/3/search/jql?jql=${encoded}&maxResults=${maxResults}&fields=summary,status,assignee,priority,issuetype`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    });
+    if (!r.ok) { const e=await r.text(); return res.status(r.status).json({ error: 'Jira error: '+e }); }
+    const data = await r.json();
+    const issues = (data.issues||[]).map(i => ({
+      key: i.key,
+      summary: i.fields?.summary||'',
+      status: i.fields?.status?.name||'',
+      assignee: i.fields?.assignee?.displayName||'Unassigned',
+      priority: i.fields?.priority?.name||'',
+      type: i.fields?.issuetype?.name||'',
+      bucket: bucketForStatus(i.fields?.status?.name||''),
+    }));
+    // Build chart data
+    const byStatus = {};
+    const byAssignee = {};
+    const byType = {};
+    issues.forEach(i => {
+      byStatus[i.status] = (byStatus[i.status]||0)+1;
+      byAssignee[i.assignee] = (byAssignee[i.assignee]||0)+1;
+      byType[i.type] = (byType[i.type]||0)+1;
+    });
+    res.json({ issues, total: data.total, byStatus, byAssignee, byType, jql });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── INTENT PARSER: Detect widget commands from chat ── */
+app.post('/api/intent', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+  if (!process.env.GROQ_API_KEY) return res.json({ intent: 'chat' });
+
+  try {
+    const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 150,
+        temperature: 0,
+        messages: [{
+          role: 'system',
+          content: `You are an intent classifier for a Jira dashboard. Current sprint is Sprint 29 (ID: 1355). Board ID is 154.
+Classify the user message and respond with JSON only. No explanation.
+
+Intents:
+- sprint_compare: comparing two sprints. Extract sprint names/numbers.
+- jql_widget: custom Jira filter or query. Generate the JQL.
+- chart_widget: wants a chart. Generate JQL and chart type (pie/bar/donut).
+- chat: general question, not a widget request.
+
+Examples:
+"compare sprint 27 and 28" -> {"intent":"sprint_compare","sprints":["Sprint 27","Sprint 28"]}
+"show blocked tickets for Jaliya" -> {"intent":"jql_widget","jql":"project=MICT AND sprint in openSprints() AND status=Blocked AND assignee='Jaliya Lamahewa'","title":"Blocked - Jaliya"}
+"show me a pie chart of ticket status" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"pie","groupBy":"status","title":"Sprint Status"}
+"bar chart of tickets by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"bar","groupBy":"assignee","title":"Tickets by Assignee"}
+"what is the sprint status" -> {"intent":"chat"}`
+        }, { role: 'user', content: text }]
+      })
+    });
+    const data = await r.json();
+    const raw = data.choices?.[0]?.message?.content?.trim()||'{"intent":"chat"}';
+    const clean = raw.replace(/```json|```/g,'').trim();
+    res.json(JSON.parse(clean));
+  } catch(e) { res.json({ intent: 'chat' }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {

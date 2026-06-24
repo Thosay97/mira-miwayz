@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>M.I.R.A. · MiWayz Command</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -350,6 +351,39 @@ canvas{position:fixed;inset:0}
   color:var(--blue);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1.5px;transition:all .2s}
 .sbtn:hover{border-color:var(--blue);opacity:.8}
 .sbtn.on{border-color:var(--orange);color:var(--orange);animation:blink .7s ease-in-out infinite}
+
+/* ── DYNAMIC GENERATED WIDGETS ── */
+.dyn-widget{
+  position:fixed;z-index:27;min-width:260px;
+  animation:widgetSpawn .4s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes widgetSpawn{
+  0%{opacity:0;transform:scale(.85) translateY(20px)}
+  100%{opacity:1;transform:scale(1) translateY(0)}
+}
+.chart-wrap{position:relative;width:100%;margin-top:8px}
+.chart-wrap canvas{max-height:180px!important}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.compare-col{border:1px solid var(--border-o);border-radius:3px;padding:8px;text-align:center}
+.compare-col-title{font-size:8px;color:var(--orange);letter-spacing:2px;margin-bottom:6px;text-transform:uppercase}
+.compare-metric{margin-bottom:6px}
+.compare-val{font-family:'Orbitron',monospace;font-size:18px;color:var(--orange)}
+.compare-label{font-size:7px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase}
+.compare-winner{font-size:7px;color:var(--green);letter-spacing:1px;margin-top:2px}
+.jql-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:8px}
+.jql-table th{color:var(--orange);letter-spacing:1.5px;padding:4px 6px;border-bottom:1px solid var(--border-o);text-align:left;font-size:7px;text-transform:uppercase}
+.jql-table td{padding:4px 6px;border-bottom:1px solid rgba(247,147,30,.06);color:var(--text-dim);vertical-align:middle}
+.jql-table tr:hover td{background:rgba(247,147,30,.04)}
+.status-badge{font-size:7px;padding:2px 5px;border-radius:3px;letter-spacing:1px;white-space:nowrap}
+.sb-done{background:rgba(0,255,170,.1);color:#00ffaa;border:1px solid rgba(0,255,170,.2)}
+.sb-blocked{background:rgba(255,80,50,.1);color:#ff5544;border:1px solid rgba(255,80,50,.2)}
+.sb-progress{background:rgba(12,166,213,.1);color:#0CA6D5;border:1px solid rgba(12,166,213,.2)}
+.sb-review{background:rgba(247,147,30,.1);color:#F7931E;border:1px solid rgba(247,147,30,.2)}
+.sb-todo{background:rgba(100,100,100,.1);color:rgba(200,200,200,.5);border:1px solid rgba(100,100,100,.15)}
+.widget-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:20px;color:var(--text-dim);font-size:9px;letter-spacing:2px}
+.widget-loading::before{content:'';width:14px;height:14px;border-radius:50%;border:2px solid var(--border-o);border-top-color:var(--orange);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dyn-count{font-family:'Orbitron',monospace;font-size:11px;color:var(--orange);margin-left:6px}
 </style>
 </head>
 <body class="dark">
@@ -1328,6 +1362,301 @@ document.addEventListener('click',e=>{
     modal.classList.remove('open');
   }
 });
+
+/* ── DYNAMIC WIDGET ENGINE ── */
+let dynWidgetCount = 0;
+const CHART_COLORS = ['#F7931E','#0CA6D5','#00ffaa','#ff5544','#a78bfa','#fbbf24','#34d399','#60a5fa'];
+
+// Chart.js global defaults
+if(typeof Chart !== 'undefined'){
+  Chart.defaults.color = 'rgba(12,166,213,.6)';
+  Chart.defaults.borderColor = 'rgba(247,147,30,.1)';
+  Chart.defaults.font.family = "'Share Tech Mono', monospace";
+  Chart.defaults.font.size = 10;
+}
+
+function createDynWidget(title, bodyHTML, opts={}){
+  dynWidgetCount++;
+  const id = 'dynW'+dynWidgetCount;
+  const vw=window.innerWidth, vh=window.innerHeight;
+  // Cascade position
+  const x = Math.min(200 + (dynWidgetCount-1)*30, vw-320);
+  const y = Math.min(80 + (dynWidgetCount-1)*30, vh-400);
+
+  const div = document.createElement('div');
+  div.className = 'hud-widget dyn-widget on';
+  div.id = id;
+  div.style.cssText = `left:${x}px;top:${y}px;width:${opts.width||300}px;z-index:27`;
+  div.innerHTML = `
+    <div class="widget-header" onmousedown="startDrag(event,'${id}')">
+      <span style="font-size:10px;opacity:.5">⠿</span>
+      <span class="widget-title">${title}</span>
+      <div class="widget-controls">
+        <button class="wc-btn max-btn" onclick="maximizeWidget('${id}')" title="Maximize">⤢</button>
+        <button class="wc-btn" onclick="minimizeWidget('${id}')" title="Minimize">─</button>
+        <button class="wc-btn close-btn" onclick="this.closest('.hud-widget').remove()" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="widget-body" id="${id}_body">
+      <div class="widget-loading">LOADING DATA</div>
+      <div class="widget-resize" onmousedown="startResize(event,'${id}')"></div>
+    </div>`;
+  document.getElementById('mainUI').appendChild(div);
+
+  // Fill body after mount
+  setTimeout(()=>{
+    const body = document.getElementById(id+'_body');
+    if(body){ body.innerHTML = bodyHTML + `<div class="widget-resize" onmousedown="startResize(event,'${id}')"></div>`; }
+  }, 50);
+
+  return id;
+}
+
+/* ── SPRINT COMPARISON ── */
+async function createSprintCompare(s1name, s2name){
+  addMsg('ai', `Fetching data for ${s1name} and ${s2name}...`);
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='FETCHING';
+
+  try{
+    // Find sprint IDs by name
+    const [r1,r2] = await Promise.all([
+      fetch(`/api/sprint/search/${encodeURIComponent(s1name)}`).then(r=>r.json()),
+      fetch(`/api/sprint/search/${encodeURIComponent(s2name)}`).then(r=>r.json()),
+    ]);
+    if(r1.error) throw new Error(r1.error);
+    if(r2.error) throw new Error(r2.error);
+
+    // Fetch stats for both
+    const [d1,d2] = await Promise.all([
+      fetch(`/api/sprint/${r1.id}`).then(r=>r.json()),
+      fetch(`/api/sprint/${r2.id}`).then(r=>r.json()),
+    ]);
+
+    const metrics = [
+      {label:'TOTAL TICKETS', k:'total', higher:'better'},
+      {label:'DONE %', k:'donePercent', suffix:'%', higher:'better'},
+      {label:'DONE', k:'done', higher:'better'},
+      {label:'BLOCKED', k:'blocked', higher:'worse'},
+      {label:'IN PROGRESS', k:'inProgress', higher:'neutral'},
+      {label:'IN REVIEW', k:'inReview', higher:'neutral'},
+    ];
+
+    const cols = metrics.map(m=>{
+      const v1=d1[m.k]||0, v2=d2[m.k]||0;
+      const suf=m.suffix||'';
+      let w1='',w2='';
+      if(m.higher==='better'){ if(v1>v2)w1='▲'; else if(v2>v1)w2='▲';}
+      if(m.higher==='worse'){ if(v1<v2)w1='✓'; else if(v2<v1)w2='✓';}
+      return `
+        <div class="compare-metric">
+          <div class="compare-label">${m.label}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:2px">
+            <span class="compare-val" style="${w1?'color:#00ffaa':''}">${v1}${suf} ${w1}</span>
+            <span class="compare-val" style="${w2?'color:#00ffaa':''}">${v2}${suf} ${w2}</span>
+          </div>
+        </div>`;
+    }).join('');
+
+    const html = `
+      <div class="compare-grid">
+        <div class="compare-col">
+          <div class="compare-col-title">${r1.name}</div>
+          ${metrics.map(m=>{
+            const v1=d1[m.k]||0,v2=d2[m.k]||0,suf=m.suffix||'';
+            const win=(m.higher==='better'&&v1>v2)||(m.higher==='worse'&&v1<v2);
+            return `<div class="compare-metric">
+              <div class="compare-label">${m.label}</div>
+              <div class="compare-val" style="${win?'color:#00ffaa':''}">${v1}${suf}${win?' ▲':''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="compare-col">
+          <div class="compare-col-title">${r2.name}</div>
+          ${metrics.map(m=>{
+            const v1=d1[m.k]||0,v2=d2[m.k]||0,suf=m.suffix||'';
+            const win=(m.higher==='better'&&v2>v1)||(m.higher==='worse'&&v2<v1);
+            return `<div class="compare-metric">
+              <div class="compare-label">${m.label}</div>
+              <div class="compare-val" style="${win?'color:#00ffaa':''}">${v2}${suf}${win?' ▲':''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="chart-wrap" style="margin-top:12px">
+        <canvas id="compareChart${dynWidgetCount+1}"></canvas>
+      </div>`;
+
+    const wid = createDynWidget(`${r1.name} vs ${r2.name}`, html, {width:360});
+    setTimeout(()=>{
+      const ctx = document.getElementById(`compareChart${dynWidgetCount}`);
+      if(ctx && typeof Chart !== 'undefined'){
+        new Chart(ctx, {
+          type:'bar',
+          data:{
+            labels:['Done%','Blocked','In Progress','In Review'],
+            datasets:[
+              {label:r1.name,data:[d1.donePercent,d1.blocked,d1.inProgress,d1.inReview],backgroundColor:'rgba(247,147,30,.7)',borderColor:'#F7931E',borderWidth:1},
+              {label:r2.name,data:[d2.donePercent,d2.blocked,d2.inProgress,d2.inReview],backgroundColor:'rgba(12,166,213,.7)',borderColor:'#0CA6D5',borderWidth:1},
+            ]
+          },
+          options:{responsive:true,plugins:{legend:{labels:{color:'rgba(247,147,30,.7)',font:{size:9}}}},scales:{x:{ticks:{color:'rgba(12,166,213,.6)'}},y:{ticks:{color:'rgba(12,166,213,.6)'}}}}
+        });
+      }
+    },200);
+
+    addMsg('ai',`Sprint comparison ready. ${r1.name}: ${d1.donePercent}% done, ${d1.blocked} blocked. ${r2.name}: ${d2.donePercent}% done, ${d2.blocked} blocked.`);
+    speakAndDisplay(`Comparison ready. ${r1.name} had ${d1.donePercent} percent done with ${d1.blocked} blocked. ${r2.name} had ${d2.donePercent} percent done with ${d2.blocked} blocked.`);
+  }catch(e){
+    addMsg('ai','Could not fetch sprint data: '+e.message);
+  }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── JQL WIDGET ── */
+async function createJQLWidget(jql, title, chartType, groupBy){
+  addMsg('ai', `Running query: ${title}...`);
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='QUERYING';
+
+  try{
+    const res = await fetch('/api/jql',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({jql, maxResults:50})
+    });
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    let html='';
+    const wid_id = 'dynW'+(dynWidgetCount+1);
+
+    if(chartType){
+      // Chart widget
+      const groupData = groupBy==='status' ? data.byStatus :
+                        groupBy==='assignee' ? data.byAssignee : data.byType;
+      const labels = Object.keys(groupData).slice(0,10);
+      const values = labels.map(l=>groupData[l]);
+      const cid = 'chart_'+Date.now();
+      html = `
+        <div style="font-size:8px;color:var(--text-dim);margin-bottom:6px">${data.total} tickets · ${jql.substring(0,50)}${jql.length>50?'...':''}</div>
+        <div class="chart-wrap"><canvas id="${cid}"></canvas></div>`;
+      const wid = createDynWidget(title, html, {width:320});
+      setTimeout(()=>{
+        const ctx = document.getElementById(cid);
+        if(ctx && typeof Chart !== 'undefined'){
+          const type = chartType==='pie'?'pie':chartType==='donut'?'doughnut':'bar';
+          new Chart(ctx,{
+            type,
+            data:{
+              labels,
+              datasets:[{
+                data:values,
+                backgroundColor:CHART_COLORS.slice(0,labels.length).map(c=>c+'bb'),
+                borderColor:CHART_COLORS.slice(0,labels.length),
+                borderWidth:1,
+              }]
+            },
+            options:{
+              responsive:true,
+              plugins:{
+                legend:{
+                  position: type==='pie'||type==='doughnut'?'right':'top',
+                  labels:{color:'rgba(247,147,30,.7)',font:{size:9},boxWidth:10}
+                }
+              },
+              scales: type==='bar'?{
+                x:{ticks:{color:'rgba(12,166,213,.6)',font:{size:8}}},
+                y:{ticks:{color:'rgba(12,166,213,.6)',font:{size:8}}}
+              }:undefined
+            }
+          });
+        }
+      },200);
+    } else {
+      // Table widget
+      const rows = data.issues.slice(0,20).map(i=>{
+        const statusClass = i.bucket==='done'?'sb-done':i.bucket==='blocked'?'sb-blocked':i.bucket==='inProgress'?'sb-progress':i.bucket==='inReview'||i.bucket==='codeReview'||i.bucket==='readyForQA'?'sb-review':'sb-todo';
+        return `<tr>
+          <td><a href="https://miwayz.atlassian.net/browse/${i.key}" target="_blank" style="color:var(--orange);text-decoration:none">${i.key}</a></td>
+          <td style="max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis" title="${i.summary}">${i.summary.substring(0,35)}${i.summary.length>35?'...':''}</td>
+          <td><span class="status-badge ${statusClass}">${i.status}</span></td>
+          <td>${i.assignee.split(' ')[0]}</td>
+        </tr>`;
+      }).join('');
+      html = `
+        <div style="font-size:8px;color:var(--text-dim);margin-bottom:6px">${data.total} tickets found<span class="dyn-count">${data.issues.length>20?'(showing 20)':''}</span></div>
+        <div style="overflow-x:auto">
+          <table class="jql-table">
+            <thead><tr><th>KEY</th><th>SUMMARY</th><th>STATUS</th><th>ASSIGNEE</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      createDynWidget(title, html, {width:420});
+    }
+
+    addMsg('ai', `Widget ready. Found ${data.total} tickets matching your query.`);
+  }catch(e){
+    addMsg('ai','Query failed: '+e.message);
+  }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── INTERCEPT CHAT FOR WIDGET COMMANDS ── */
+const _origSendAfterTeams = send;
+async function send(){
+  const inp = document.getElementById('sinp');
+  const text = inp.value.trim();
+  if(!text) return;
+
+  // Check Teams keywords first
+  const tl=text.toLowerCase();
+  if(typeof teamsKeywords!=='undefined'&&teamsKeywords.some(k=>tl.includes(k))){
+    inp.value='';
+    if(tl.includes('blocker')) return sendToTeams('blockers');
+    if(tl.includes('gtm')||tl.includes('countdown')) return sendToTeams('gtm');
+    return sendToTeams('sprint');
+  }
+
+  // Check widget intent
+  try{
+    const intentRes = await fetch('/api/intent',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text})
+    });
+    const intent = await intentRes.json();
+
+    if(intent.intent==='sprint_compare' && intent.sprints?.length===2){
+      inp.value='';
+      return createSprintCompare(intent.sprints[0], intent.sprints[1]);
+    }
+    if(intent.intent==='jql_widget' && intent.jql){
+      inp.value='';
+      return createJQLWidget(intent.jql, intent.title||'Custom Query', null, null);
+    }
+    if(intent.intent==='chart_widget' && intent.jql){
+      inp.value='';
+      return createJQLWidget(intent.jql, intent.title||'Chart', intent.chartType||'pie', intent.groupBy||'status');
+    }
+  }catch(e){ /* fallthrough to normal chat */ }
+
+  // Normal chat
+  inp.value='';
+  addMsg('user',text);orbState='thinking';
+  document.getElementById('orbStatusText').textContent='PROCESSING';
+  try{
+    const endpoint = typeof mcpMode!=='undefined'&&mcpMode ? '/api/mcp' : '/api/chat';
+    const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:text}],jiraContext:liveJira})});
+    const data=await res.json();
+    if(data.fallback){
+      const res2=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({messages:[{role:'user',content:text}],jiraContext:liveJira})});
+      const data2=await res2.json();
+      const reply2=data2.reply||data2.error||'Signal lost.';
+      addMsg('ai','');setTimeout(()=>speakAndDisplay(reply2),100);return;
+    }
+    const reply=data.reply||data.error||'Signal lost.';
+    if(data.source==='claude-mcp'){const src=document.createElement('div');src.style.cssText='font-size:7px;color:rgba(247,147,30,.35);letter-spacing:2px;text-align:right;margin-top:2px';src.textContent='VIA CLAUDE + ROVO';document.getElementById('chatOut').appendChild(src);}
+    addMsg('ai','');setTimeout(()=>speakAndDisplay(reply),100);
+  }catch(e){addMsg('ai','Connection error. Make sure the server is running on port 3001 and Ollama is active.');}
+  orbState='active';document.getElementById('orbStatusText').textContent='ONLINE';
+}
 
 /* ── CUSTOM CURSOR ── */
 (function(){
