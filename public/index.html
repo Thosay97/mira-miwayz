@@ -53,20 +53,29 @@ canvas{position:fixed;inset:0}
   #sClock { font-size:10px; }
   #mcpToggle { font-size:7px; padding:2px 6px; }
 
-  /* Main stage -- orb centered */
+  /* Main stage -- orb perfectly centered between status bar and card strip */
   #stage {
-    top:44px; bottom:220px;
-    align-items:center; justify-content:center;
+    position:fixed;
+    top:44px;
+    left:0; right:0;
+    bottom:310px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
-  #orbWrap { width:220px; height:220px; }
-  #orbCanvas { width:220px!important; height:220px!important; }
-  #miraText { font-size:15px; letter-spacing:4px; }
+  #orbWrap {
+    width:200px; height:200px;
+    position:relative;
+    flex-shrink:0;
+  }
+  #orbCanvas { width:200px!important; height:200px!important; }
+  #miraText { font-size:14px; letter-spacing:4px; }
   #miraSubText { font-size:6px; letter-spacing:2px; }
   #orbStatusText { font-size:8px; }
 
   /* Mobile dashboard cards -- horizontal scroll strip */
   #mobileDash {
-    position:fixed; bottom:160px; left:0; right:0; z-index:25;
+    position:fixed; bottom:148px; left:0; right:0; z-index:25;
     display:flex; gap:8px; padding:0 12px;
     overflow-x:auto; overflow-y:hidden;
     scroll-snap-type:x mandatory;
@@ -137,31 +146,52 @@ canvas{position:fixed;inset:0}
 
   /* Chat area -- mobile */
   #chatOut {
-    bottom:100px; left:12px; right:12px;
-    max-height:80px; font-size:11px;
+    bottom:88px; left:12px; right:12px;
+    max-height:70px; font-size:11px;
   }
   #chatTray {
-    padding:10px 12px;
-    padding-bottom:max(10px, env(safe-area-inset-bottom));
-    gap:8px;
+    padding:8px 10px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom));
+    gap:5px;
+    flex-wrap:nowrap;
+    align-items:center;
   }
-  .sinp { font-size:14px; padding:8px 10px; }
-  .sbtn { font-size:10px; padding:8px 12px; }
-  #micB { padding:8px 14px; }
+  .sinp {
+    font-size:13px;
+    padding:7px 8px;
+    min-width:0;
+    flex:1;
+  }
+  .sbtn {
+    font-size:9px;
+    padding:7px 8px;
+    letter-spacing:.8px;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  #micB { padding:7px 10px; flex-shrink:0; }
+  #teamsBtn { padding:7px 8px; font-size:9px; letter-spacing:.8px; }
 
   /* Waveform */
-  #wvWrap { bottom:110px; }
+  #wvWrap { bottom:96px; }
 
   /* Ticker */
-  #ticker { bottom:96px; font-size:7px; }
+  #ticker { bottom:90px; font-size:7px; display:none; }
 
   /* Scan line */
   .scanline { display:none; }
 
   /* Mobile action row -- quick buttons above chat */
   #mobileActions {
-    position:fixed; bottom:155px; left:12px; right:12px; z-index:28;
-    display:flex; gap:6px; justify-content:center;
+    position:fixed; bottom:260px; left:12px; right:12px; z-index:28;
+    display:flex; gap:5px; justify-content:center;
+    flex-wrap:nowrap;
+  }
+  .mob-action {
+    font-size:8px;
+    padding:5px 8px;
+    letter-spacing:.8px;
+    flex-shrink:0;
   }
   .mob-action {
     background:rgba(2,6,16,.9); border:1px solid rgba(247,147,30,.2);
