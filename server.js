@@ -750,6 +750,9 @@ Intents:
 - sprint_compare: comparing two sprints. Extract sprint names/numbers.
 - jql_widget: custom Jira filter or query. Generate the JQL.
 - chart_widget: wants a chart. Generate JQL and chart type (pie/bar/donut).
+- standup: wants standup report or daily standup.
+- burndown: wants burndown chart for current sprint.
+- briefing: wants morning briefing or daily briefing.
 - chat: general question, not a widget request.
 
 Examples:
@@ -757,6 +760,9 @@ Examples:
 "show blocked tickets for Jaliya" -> {"intent":"jql_widget","jql":"project=MICT AND sprint in openSprints() AND status=Blocked AND assignee='Jaliya Lamahewa'","title":"Blocked - Jaliya"}
 "show me a pie chart of ticket status" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"pie","groupBy":"status","title":"Sprint Status"}
 "bar chart of tickets by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"bar","groupBy":"assignee","title":"Tickets by Assignee"}
+"generate standup" -> {"intent":"standup"}
+"show burndown" -> {"intent":"burndown"}
+"morning briefing" -> {"intent":"briefing"}
 "what is the sprint status" -> {"intent":"chat"}`
         }, { role: 'user', content: text }]
       })
@@ -766,6 +772,183 @@ Examples:
     const clean = raw.replace(/```json|```/g,'').trim();
     res.json(JSON.parse(clean));
   } catch(e) { res.json({ intent: 'chat' }); }
+});
+
+/* ── STANDUP GENERATOR ── */
+app.get('/api/standup', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  async function jiraGet(path) {
+    const r = await fetch(`${base}${path}`, { headers: { 'Authorization': auth, 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(`Jira ${r.status}`);
+    return r.json();
+  }
+  try {
+    // Get active sprint issues
+    const sprintData = await jiraGet('/rest/agile/1.0/board/154/sprint?state=active');
+    const sprint = sprintData.values[0];
+    const fields = 'summary,status,assignee,updated,created,priority';
+    const data = await jiraGet(`/rest/agile/1.0/sprint/${sprint.id}/issue?maxResults=200&fields=${fields}`);
+    const issues = data.issues || [];
+
+    // Yesterday boundary
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(0,0,0,0);
+
+    const squads = {
+      'Squad 1': ['Ashfak','Jaliya','Kukeenthan','Sujanthan','Umar','Nadee'],
+      'Squad 2': ['Chethana','Husni','Yuvanshan','Dilip','Kasuni'],
+      'Squad 3': ['Sineth','Thanuja','Thajun','Vishagan','Oneli'],
+    };
+
+    const standup = {};
+    Object.keys(squads).forEach(sq => { standup[sq] = { done: [], inProgress: [], blocked: [], updatedYesterday: [] }; });
+
+    issues.forEach(issue => {
+      const assignee = issue.fields?.assignee?.displayName || '';
+      const firstName = assignee.split(' ')[0];
+      const status = issue.fields?.status?.name || '';
+      const bucket = bucketForStatus(status);
+      const updated = new Date(issue.fields?.updated);
+      const summary = issue.fields?.summary?.substring(0,55) || '';
+      const key = issue.key;
+
+      let squad = null;
+      for (const [sq, members] of Object.entries(squads)) {
+        if (members.some(m => firstName.includes(m) || assignee.includes(m))) { squad = sq; break; }
+      }
+      if (!squad) return;
+
+      if (bucket === 'done') standup[squad].done.push({ key, summary, assignee: firstName });
+      else if (bucket === 'inProgress') standup[squad].inProgress.push({ key, summary, assignee: firstName });
+      else if (bucket === 'blocked') standup[squad].blocked.push({ key, summary, assignee: firstName });
+      if (updated >= yesterday) standup[squad].updatedYesterday.push({ key, summary, status, assignee: firstName });
+    });
+
+    // Build text summary for MIRA to speak
+    const gtmDays = Math.max(0, Math.ceil((new Date('2026-07-12') - new Date()) / 86400000));
+    let summary = `Sprint ${sprint.name} Standup. ${gtmDays} days to GTM.
+
+`;
+    for (const [sq, data] of Object.entries(standup)) {
+      summary += `${sq}: ${data.done.length} done, ${data.inProgress.length} in progress, ${data.blocked.length} blocked. `;
+      if (data.updatedYesterday.length > 0) summary += `${data.updatedYesterday.length} tickets updated yesterday. `;
+      summary += '
+';
+    }
+
+    res.json({ sprint: sprint.name, gtmDays, standup, summary, generatedAt: new Date().toISOString() });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── BURNDOWN DATA ── */
+app.get('/api/burndown', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+  async function jiraGet(path) {
+    const r = await fetch(`${base}${path}`, { headers: { 'Authorization': auth, 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(`Jira ${r.status}`);
+    return r.json();
+  }
+  try {
+    const sprintData = await jiraGet('/rest/agile/1.0/board/154/sprint?state=active');
+    const sprint = sprintData.values[0];
+    const startDate = new Date(sprint.startDate);
+    const endDate = new Date(sprint.endDate);
+    const today = new Date();
+
+    // Fetch all issues with creation and resolution dates
+    const fields = 'summary,status,resolutiondate,created,statuscategorychangedate';
+    const data = await jiraGet(`/rest/agile/1.0/sprint/${sprint.id}/issue?maxResults=300&fields=${fields}`);
+    const issues = data.issues || [];
+    const total = issues.length;
+
+    // Build daily burndown -- count remaining (not done) per day
+    const days = [];
+    const current = new Date(startDate);
+    current.setHours(0,0,0,0);
+    const end = new Date(Math.min(today.getTime(), endDate.getTime()));
+
+    while (current <= end) {
+      const dayEnd = new Date(current);
+      dayEnd.setHours(23,59,59,999);
+      // Count issues NOT done by end of this day
+      const remaining = issues.filter(issue => {
+        const resDate = issue.fields?.resolutiondate || issue.fields?.statuscategorychangedate;
+        const bucket = bucketForStatus(issue.fields?.status?.name || '');
+        if (bucket !== 'done') return true; // still open
+        if (!resDate) return false;
+        return new Date(resDate) > dayEnd; // resolved after this day
+      }).length;
+      days.push({
+        date: current.toLocaleDateString('en-GB', { day:'numeric', month:'short' }),
+        remaining,
+        ideal: Math.round(total * (1 - (current - startDate) / (endDate - startDate)))
+      });
+      current.setDate(current.getDate() + 1);
+    }
+
+    // Project remaining days (ideal line only)
+    const projCurrent = new Date(today);
+    projCurrent.setDate(projCurrent.getDate() + 1);
+    while (projCurrent <= endDate) {
+      days.push({
+        date: projCurrent.toLocaleDateString('en-GB', { day:'numeric', month:'short' }),
+        remaining: null, // no actual data yet
+        ideal: Math.round(total * (1 - (projCurrent - startDate) / (endDate - startDate)))
+      });
+      projCurrent.setDate(projCurrent.getDate() + 1);
+    }
+
+    res.json({
+      sprint: sprint.name,
+      total,
+      done: issues.filter(i => bucketForStatus(i.fields?.status?.name||'') === 'done').length,
+      days,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── DAILY BRIEFING ── */
+app.get('/api/briefing', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  try {
+    // Pull live Jira data (use cache if fresh)
+    const jiraRes = await fetch(`http://localhost:${process.env.PORT||3001}/api/jira`);
+    const jira = await jiraRes.json();
+    const standupRes = await fetch(`http://localhost:${process.env.PORT||3001}/api/standup`);
+    const standup = await standupRes.json();
+
+    const today = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+    const gtmDays = jira.gtmDays || 0;
+
+    // Build briefing text
+    const briefing = {
+      date: today,
+      gtmDays,
+      sprintName: jira.sprintName,
+      sprintGoal: jira.sprintGoal,
+      total: jira.total,
+      done: jira.done,
+      donePercent: jira.donePercent,
+      blocked: jira.blocked,
+      inProgress: jira.inProgress,
+      blockedTickets: jira.blockedTickets || [],
+      standup: standup.standup,
+      speech: `Good morning Thoshan. Today is ${today}. You have ${gtmDays} days until the Colombo GTM launch.
+${jira.sprintGoal ? 'Sprint goal: ' + jira.sprintGoal + '.' : ''}
+${jira.sprintName} has ${jira.total} tickets. ${jira.done} are done, that is ${jira.donePercent} percent.
+${jira.blocked > 0 ? `There are ${jira.blocked} blocked tickets that need your attention.` : 'No blockers today, great work team.'}
+${jira.blockedTickets?.[0] ? 'Top blocker is ' + jira.blockedTickets[0].key + ' assigned to ' + jira.blockedTickets[0].assignee.split(' ')[0] + '.' : ''}
+Have a productive day.`
+    };
+    res.json(briefing);
+  } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

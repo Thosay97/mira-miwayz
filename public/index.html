@@ -513,10 +513,15 @@ canvas{position:fixed;inset:0}
   <button id="addWidgetBtn" onclick="toggleAddWidget()">+</button>
   <div id="addWidgetModal">
     <div class="awm-title">Add Dashboard Widget</div>
+    <div style="font-size:8px;color:rgba(247,147,30,.4);letter-spacing:1px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid rgba(247,147,30,.1)">LIVE WIDGETS</div>
     <div class="awm-opt" onclick="addWidget('gtm')"><span class="awm-icon">📊</span><span class="awm-label">GTM LAUNCH</span></div>
     <div class="awm-opt" onclick="addWidget('blockers')"><span class="awm-icon">🚨</span><span class="awm-label">BLOCKERS WATCH</span></div>
     <div class="awm-opt" onclick="addWidget('squads')"><span class="awm-icon">👥</span><span class="awm-label">SQUAD PROGRESS</span></div>
     <div class="awm-opt" onclick="addWidget('epics')"><span class="awm-icon">⚡</span><span class="awm-label">ACTIVE EPICS</span></div>
+    <div style="font-size:8px;color:rgba(247,147,30,.4);letter-spacing:1px;margin:6px 0 4px;padding-top:6px;border-top:1px solid rgba(247,147,30,.1)">AI GENERATED</div>
+    <div class="awm-opt" onclick="addWidget('briefing')"><span class="awm-icon">🌅</span><span class="awm-label">MORNING BRIEFING</span></div>
+    <div class="awm-opt" onclick="addWidget('standup')"><span class="awm-icon">🎯</span><span class="awm-label">STANDUP REPORT</span></div>
+    <div class="awm-opt" onclick="addWidget('burndown')"><span class="awm-icon">📉</span><span class="awm-label">BURNDOWN CHART</span></div>
     <div class="awm-close" onclick="toggleAddWidget()">CLOSE</div>
   </div>
 
@@ -777,6 +782,8 @@ function revealMainUI(){
   setTimeout(()=>document.getElementById('pTop').classList.add('on'),300);
   // Show widgets with stagger
   setTimeout(()=>showWidgets(),400);
+  // Schedule 9am daily briefing
+  setTimeout(()=>scheduleDailyBriefing(), 2000);
   setTimeout(()=>{document.getElementById('chatTray').classList.add('on');document.getElementById('chatOut').classList.add('on');document.getElementById('ticker').classList.add('on');},600);
 
   fetchJira().then(()=>{
@@ -1689,6 +1696,192 @@ async function createJQLWidget(jql, title, chartType, groupBy){
   orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
 }
 
+/* ── STANDUP GENERATOR ── */
+async function createStandupWidget(){
+  addMsg('ai','Generating standup from live Jira data...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='GENERATING';
+  try{
+    const res = await fetch('/api/standup');
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    const squadColors = {'Squad 1':'#F7931E','Squad 2':'#0CA6D5','Squad 3':'#00ffaa'};
+    let html = `<div style="font-size:9px;color:var(--text-dim);margin-bottom:10px;letter-spacing:1px">${data.sprint} · ${data.gtmDays} days to GTM</div>`;
+
+    for(const [squad, d] of Object.entries(data.standup)){
+      const col = squadColors[squad]||'#F7931E';
+      html += `
+        <div style="margin-bottom:10px;border-left:2px solid ${col};padding-left:8px">
+          <div style="font-size:9px;color:${col};letter-spacing:2px;margin-bottom:4px;font-weight:600">${squad.toUpperCase()}</div>
+          <div style="font-size:9px;color:var(--text-dim);line-height:1.8">
+            <span style="color:#00ffaa">✓ ${d.done.length} done</span> &nbsp;
+            <span style="color:#0CA6D5">⟳ ${d.inProgress.length} in progress</span> &nbsp;
+            ${d.blocked.length>0?`<span style="color:#ff5544">⚠ ${d.blocked.length} blocked</span>`:''}
+          </div>
+          ${d.updatedYesterday.length>0?`<div style="font-size:8px;color:rgba(255,255,255,.3);margin-top:3px">${d.updatedYesterday.length} updated since yesterday</div>`:''}
+          ${d.blocked.length>0?d.blocked.slice(0,2).map(t=>`<div style="font-size:8px;color:#ff5544;margin-top:2px">• ${t.key} (${t.assignee})</div>`).join(''):''}
+        </div>`;
+    }
+
+    // Send to Teams button
+    html += `<div style="margin-top:8px;display:flex;gap:6px">
+      <button onclick="sendToTeams('sprint')" style="background:transparent;border:1px solid rgba(100,140,255,.4);border-radius:3px;padding:4px 10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">POST TO TEAMS</button>
+    </div>`;
+
+    createDynWidget('Daily Standup · '+new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}), html, {width:300});
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay(`Standup ready. ${data.summary}`),100);
+  }catch(e){ addMsg('ai','Standup failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── BURNDOWN CHART ── */
+async function createBurndownWidget(){
+  addMsg('ai','Fetching burndown data...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='BURNDOWN';
+  try{
+    const res = await fetch('/api/burndown');
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    const cid = 'burndown_'+Date.now();
+    const donePercent = Math.round((data.done/Math.max(data.total,1))*100);
+    const html = `
+      <div style="display:flex;gap:12px;margin-bottom:8px">
+        <div style="text-align:center">
+          <div style="font-family:'Orbitron',monospace;font-size:22px;color:#00ffaa">${donePercent}%</div>
+          <div style="font-size:8px;color:var(--text-dim);letter-spacing:1px">DONE</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--orange)">${data.total-data.done}</div>
+          <div style="font-size:8px;color:var(--text-dim);letter-spacing:1px">REMAINING</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-family:'Orbitron',monospace;font-size:22px;color:var(--blue)">${data.total}</div>
+          <div style="font-size:8px;color:var(--text-dim);letter-spacing:1px">TOTAL</div>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="${cid}"></canvas></div>`;
+
+    createDynWidget(`Burndown · ${data.sprint}`, html, {width:380});
+
+    setTimeout(()=>{
+      const ctx = document.getElementById(cid);
+      if(ctx && typeof Chart !== 'undefined'){
+        const labels = data.days.map(d=>d.date);
+        const actual = data.days.map(d=>d.remaining);
+        const ideal  = data.days.map(d=>d.ideal);
+        new Chart(ctx,{
+          type:'line',
+          data:{
+            labels,
+            datasets:[
+              {label:'Ideal',data:ideal,borderColor:'rgba(12,166,213,.5)',borderDash:[5,5],pointRadius:0,borderWidth:1.5,fill:false},
+              {label:'Actual',data:actual,borderColor:'#F7931E',backgroundColor:'rgba(247,147,30,.08)',pointRadius:3,pointBackgroundColor:'#F7931E',borderWidth:2,fill:true,spanGaps:false},
+            ]
+          },
+          options:{
+            responsive:true,
+            plugins:{legend:{labels:{color:'rgba(247,147,30,.6)',font:{size:9},boxWidth:12}}},
+            scales:{
+              x:{ticks:{color:'rgba(12,166,213,.5)',font:{size:8},maxRotation:45}},
+              y:{ticks:{color:'rgba(12,166,213,.5)',font:{size:8}},title:{display:true,text:'Remaining',color:'rgba(12,166,213,.4)',font:{size:8}}}
+            }
+          }
+        });
+      }
+    },200);
+
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay(`Burndown chart ready. ${data.sprint} has ${data.done} of ${data.total} tickets done. ${data.total-data.done} remaining.`),100);
+  }catch(e){ addMsg('ai','Burndown failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── DAILY BRIEFING ── */
+async function runDailyBriefing(auto=false){
+  if(!auto) addMsg('ai','Running your daily briefing...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='BRIEFING';
+  try{
+    const res = await fetch('/api/briefing');
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    const cid = 'briefing_'+Date.now();
+    const html = `
+      <div style="font-size:9px;color:var(--text-dim);margin-bottom:8px">${data.date}</div>
+      ${data.sprintGoal?`<div style="font-size:9px;color:rgba(12,166,213,.5);border-left:2px solid rgba(247,147,30,.3);padding-left:6px;margin-bottom:10px;line-height:1.5">${data.sprintGoal}</div>`:''}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="text-align:center;border:1px solid var(--border-o);border-radius:3px;padding:6px">
+          <div style="font-family:'Orbitron',monospace;font-size:20px;color:var(--orange)">${data.gtmDays}</div>
+          <div style="font-size:7px;color:var(--text-dim);letter-spacing:1px">GTM DAYS</div>
+        </div>
+        <div style="text-align:center;border:1px solid var(--border-o);border-radius:3px;padding:6px">
+          <div style="font-family:'Orbitron',monospace;font-size:20px;color:#00ffaa">${data.donePercent}%</div>
+          <div style="font-size:7px;color:var(--text-dim);letter-spacing:1px">DONE</div>
+        </div>
+        <div style="text-align:center;border:1px solid var(--border-o);border-radius:3px;padding:6px">
+          <div style="font-family:'Orbitron',monospace;font-size:20px;color:${data.blocked>0?'#ff5544':'#00ffaa'}">${data.blocked}</div>
+          <div style="font-size:7px;color:var(--text-dim);letter-spacing:1px">BLOCKED</div>
+        </div>
+      </div>
+      ${data.blockedTickets.length>0?`
+        <div style="font-size:8px;color:#ff5544;letter-spacing:1px;margin-bottom:4px">TOP BLOCKERS</div>
+        ${data.blockedTickets.slice(0,4).map(t=>`
+          <div style="font-size:9px;color:var(--text-dim);padding:3px 0;border-bottom:1px solid rgba(247,147,30,.06)">
+            <span style="color:var(--orange)">${t.key}</span> · ${t.summary.substring(0,40)}${t.summary.length>40?'...':''} <span style="opacity:.5">(${t.assignee.split(' ')[0]})</span>
+          </div>`).join('')}`:'<div style="font-size:9px;color:#00ffaa">No blockers today!</div>'}
+      <div style="margin-top:10px;display:flex;gap:6px">
+        <button onclick="createStandupWidget()" style="background:transparent;border:1px solid var(--border-o);border-radius:3px;padding:4px 10px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">STANDUP</button>
+        <button onclick="createBurndownWidget()" style="background:transparent;border:1px solid var(--border-o);border-radius:3px;padding:4px 10px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">BURNDOWN</button>
+        <button onclick="sendToTeams('sprint')" style="background:transparent;border:1px solid rgba(100,140,255,.4);border-radius:3px;padding:4px 10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">TEAMS</button>
+      </div>`;
+
+    createDynWidget('Morning Briefing · '+data.date, html, {width:340});
+
+    // Speak the briefing
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay(data.speech),100);
+  }catch(e){ addMsg('ai','Briefing failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── SCHEDULE DAILY BRIEFING AT 9AM ── */
+function scheduleDailyBriefing(){
+  const now = new Date();
+  const next9am = new Date();
+  next9am.setHours(9,0,0,0);
+  if(now >= next9am) next9am.setDate(next9am.getDate()+1);
+  const msUntil = next9am - now;
+  console.log(`Daily briefing scheduled in ${Math.round(msUntil/60000)} minutes`);
+  setTimeout(()=>{
+    runDailyBriefing(true);
+    setInterval(()=>runDailyBriefing(true), 24*60*60*1000);
+  }, msUntil);
+}
+
+/* ── ADD WIDGETS TO MENU ── */
+function addWidget(type){
+  const map={gtm:'wGTM',blockers:'wBLK',squads:'wSQ',epics:'wEP'};
+  if(map[type]){
+    const w=document.getElementById(map[type]);
+    w.classList.remove('closed','minimized','maximized');
+    w.classList.add('on');
+    if(!w.style.left||w.style.left==='0px'){
+      w.style.left=Math.round(window.innerWidth/2-110)+'px';
+      w.style.top='100px';
+    }
+    updateDock();saveWidgetState();
+    toggleAddWidget();
+    return;
+  }
+  // Dynamic widgets
+  toggleAddWidget();
+  if(type==='standup') return createStandupWidget();
+  if(type==='burndown') return createBurndownWidget();
+  if(type==='briefing') return runDailyBriefing();
+}
+
 /* ── INTERCEPT CHAT FOR WIDGET COMMANDS ── */
 const _origSendAfterTeams = send;
 async function send(){
@@ -1714,17 +1907,17 @@ async function send(){
     const intent = await intentRes.json();
 
     if(intent.intent==='sprint_compare' && intent.sprints?.length===2){
-      inp.value='';
-      return createSprintCompare(intent.sprints[0], intent.sprints[1]);
+      inp.value=''; return createSprintCompare(intent.sprints[0], intent.sprints[1]);
     }
     if(intent.intent==='jql_widget' && intent.jql){
-      inp.value='';
-      return createJQLWidget(intent.jql, intent.title||'Custom Query', null, null);
+      inp.value=''; return createJQLWidget(intent.jql, intent.title||'Custom Query', null, null);
     }
     if(intent.intent==='chart_widget' && intent.jql){
-      inp.value='';
-      return createJQLWidget(intent.jql, intent.title||'Chart', intent.chartType||'pie', intent.groupBy||'status');
+      inp.value=''; return createJQLWidget(intent.jql, intent.title||'Chart', intent.chartType||'pie', intent.groupBy||'status');
     }
+    if(intent.intent==='standup'){ inp.value=''; return createStandupWidget(); }
+    if(intent.intent==='burndown'){ inp.value=''; return createBurndownWidget(); }
+    if(intent.intent==='briefing'){ inp.value=''; return runDailyBriefing(); }
   }catch(e){ /* fallthrough to normal chat */ }
 
   // Normal chat
