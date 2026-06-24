@@ -53,34 +53,16 @@ canvas{position:fixed;inset:0}
   #sClock { font-size:10px; }
   #mcpToggle { font-size:7px; padding:2px 6px; }
 
-  /* Main stage -- orb perfectly centered between status bar and card strip */
-  #stage {
-    position:fixed!important;
-    top:44px!important;
-    left:0!important;
-    right:0!important;
-    bottom:310px!important;
-    display:flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    inset:unset!important;
-  }
+  /* Main stage -- let it stay fullscreen but use margin to center orb */
   #orbWrap {
     width:200px!important;
     height:200px!important;
     position:relative!important;
     flex-shrink:0!important;
-    margin:0 auto!important;
+    /* Push down from top to clear status bar, push up to clear cards */
+    margin-top:-160px!important;
   }
   #orbCanvas { width:200px!important; height:200px!important; }
-  #centerVoid {
-    position:absolute!important;
-    inset:0!important;
-    display:flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    flex-direction:column!important;
-  }
   #miraText { font-size:14px; letter-spacing:4px; }
   #miraSubText { font-size:6px; letter-spacing:2px; }
   #orbStatusText { font-size:8px; }
