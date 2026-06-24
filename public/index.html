@@ -1306,6 +1306,76 @@ function onResize(e){
   w.style.width=newW+'px';
   const body=w.querySelector('.widget-body');
   if(body) body.style.minHeight=Math.max(60,newH-36)+'px';
+  // Dynamic font scaling -- base width is 220px
+  scaleFonts(w, newW);
+}
+
+function scaleFonts(w, width){
+  // Scale factor: 1.0 at 220px, up to 1.6 at 500px, down to 0.75 at 160px
+  const scale = Math.min(1.8, Math.max(0.75, width / 220));
+  const body = w.querySelector('.widget-body');
+  if(!body) return;
+
+  // Scale different element types proportionally
+  body.querySelectorAll('.pv').forEach(el => {
+    el.style.fontSize = Math.round(32 * scale)+'px';
+  });
+  body.querySelectorAll('.ps').forEach(el => {
+    el.style.fontSize = Math.round(9 * scale)+'px';
+  });
+  body.querySelectorAll('.blb').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+    el.style.width = Math.round(44 * scale)+'px';
+  });
+  body.querySelectorAll('.bn').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+  });
+  body.querySelectorAll('.btr').forEach(el => {
+    el.style.height = Math.round(8 * scale)+'px';
+  });
+  body.querySelectorAll('.tk').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+  });
+  body.querySelectorAll('.ts2').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+  });
+  body.querySelectorAll('.etxt').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+  });
+  body.querySelectorAll('.estat').forEach(el => {
+    el.style.fontSize = Math.round(9 * scale)+'px';
+  });
+  body.querySelectorAll('.edot').forEach(el => {
+    const s = Math.round(7 * scale)+'px';
+    el.style.width = s; el.style.height = s;
+  });
+  body.querySelectorAll('.pl').forEach(el => {
+    el.style.fontSize = Math.round(10 * scale)+'px';
+  });
+  // Scale widget title too
+  const title = w.querySelector('.widget-title');
+  if(title) title.style.fontSize = Math.round(10 * scale)+'px';
+  // Table text
+  body.querySelectorAll('.jql-table td, .jql-table th').forEach(el => {
+    el.style.fontSize = Math.round(8 * scale)+'px';
+  });
+  body.querySelectorAll('.status-badge').forEach(el => {
+    el.style.fontSize = Math.round(7 * scale)+'px';
+  });
+  // Compare widget
+  body.querySelectorAll('.compare-val').forEach(el => {
+    el.style.fontSize = Math.round(18 * scale)+'px';
+  });
+  body.querySelectorAll('.compare-label').forEach(el => {
+    el.style.fontSize = Math.round(7 * scale)+'px';
+  });
+  body.querySelectorAll('.compare-col-title').forEach(el => {
+    el.style.fontSize = Math.round(8 * scale)+'px';
+  });
+  // Squad name subtitles
+  body.querySelectorAll('[style*="font-size:7px"]').forEach(el => {
+    el.style.fontSize = Math.round(7 * scale)+'px';
+  });
 }
 function stopResize(){
   resizeState=null;saveWidgetState();
