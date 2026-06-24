@@ -1,0 +1,22 @@
+{
+  "name": "M.I.R.A. · MiWayz Command",
+  "short_name": "MIRA",
+  "description": "MiWayz Intelligence & Resource Advisor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000508",
+  "theme_color": "#F7931E",
+  "orientation": "landscape-primary",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "screenshots": [
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "form_factor": "wide" }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    { "name": "Morning Briefing", "short_name": "Briefing", "description": "Run daily briefing", "url": "/?action=briefing", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Standup", "short_name": "Standup", "description": "Generate standup", "url": "/?action=standup", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

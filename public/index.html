@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>M.I.R.A. · MiWayz Command</title>
+<meta name="theme-color" content="#F7931E">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MIRA">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
@@ -26,6 +32,34 @@ body.dark{
 canvas{position:fixed;inset:0}
 #bgCanvas{z-index:0}
 #particleCanvas{z-index:1;pointer-events:none}
+
+/* ── PWA INSTALL BANNER ── */
+#pwaInstall{
+  position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
+  z-index:50;background:rgba(2,6,16,.96);
+  border:1px solid rgba(247,147,30,.4);border-radius:8px;
+  padding:10px 16px;display:none;align-items:center;gap:12px;
+  backdrop-filter:blur(12px);animation:widgetSpawn .4s ease;
+  box-shadow:0 0 30px rgba(247,147,30,.15);
+}
+#pwaInstall.show{display:flex}
+#pwaInstall .pwa-icon{font-size:22px}
+#pwaInstall .pwa-text{font-size:9px;color:rgba(247,147,30,.8);letter-spacing:1px;line-height:1.6}
+#pwaInstall .pwa-text strong{color:#F7931E;display:block;letter-spacing:2px;margin-bottom:2px}
+#pwaInstall .pwa-btn{background:rgba(247,147,30,.15);border:1px solid rgba(247,147,30,.5);border-radius:4px;padding:5px 12px;color:#F7931E;font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1.5px;white-space:nowrap;transition:all .2s}
+#pwaInstall .pwa-btn:hover{background:rgba(247,147,30,.25)}
+#pwaInstall .pwa-dismiss{color:rgba(247,147,30,.3);font-size:10px;cursor:pointer;padding:4px;transition:color .2s}
+#pwaInstall .pwa-dismiss:hover{color:rgba(247,147,30,.7)}
+
+/* Offline indicator */
+#offlineBar{
+  position:fixed;top:38px;left:0;right:0;z-index:41;
+  background:rgba(255,80,50,.9);
+  padding:4px;text-align:center;
+  font-size:8px;letter-spacing:2px;color:#fff;
+  display:none;backdrop-filter:blur(4px);
+}
+#offlineBar.show{display:block}
 
 /* ── CUSTOM CURSOR ── */
 *{cursor:none!important}
@@ -387,6 +421,17 @@ canvas{position:fixed;inset:0}
 </style>
 </head>
 <body class="dark">
+
+<!-- PWA INSTALL BANNER -->
+<div id="pwaInstall">
+  <div class="pwa-icon">📱</div>
+  <div class="pwa-text"><strong>INSTALL M.I.R.A.</strong>Add to your home screen for instant access</div>
+  <button class="pwa-btn" id="pwaInstallBtn">INSTALL</button>
+  <span class="pwa-dismiss" id="pwaDismiss">✕</span>
+</div>
+
+<!-- OFFLINE INDICATOR -->
+<div id="offlineBar">⚠ OFFLINE MODE — Using cached data and Ollama fallback</div>
 
 <!-- CUSTOM CURSOR -->
 <div id="cursor"></div>
@@ -1940,6 +1985,86 @@ async function send(){
   }catch(e){addMsg('ai','Connection error. Make sure the server is running on port 3001 and Ollama is active.');}
   orbState='active';document.getElementById('orbStatusText').textContent='ONLINE';
 }
+
+/* ── PWA REGISTRATION ── */
+(function(){
+  // Register service worker
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('/sw.js').then(reg=>{
+        console.log('MIRA SW registered:', reg.scope);
+        // Check for updates
+        reg.addEventListener('updatefound', ()=>{
+          const worker = reg.installing;
+          worker.addEventListener('statechange', ()=>{
+            if(worker.state==='installed' && navigator.serviceWorker.controller){
+              addMsg('ai','MIRA has been updated. Refresh to get the latest version.');
+            }
+          });
+        });
+      }).catch(err=>console.log('SW failed:', err));
+    });
+  }
+
+  // PWA Install prompt
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e=>{
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show install banner after MIRA wakes up
+    setTimeout(()=>{
+      const banner = document.getElementById('pwaInstall');
+      if(banner && !localStorage.getItem('mira-pwa-dismissed')) banner.classList.add('show');
+    }, 5000);
+  });
+
+  document.getElementById('pwaInstallBtn')?.addEventListener('click', async ()=>{
+    if(!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const result = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('pwaInstall').classList.remove('show');
+    if(result.outcome==='accepted'){
+      addMsg('ai','MIRA installed successfully. You can now open it from your dock or home screen.');
+    }
+  });
+
+  document.getElementById('pwaDismiss')?.addEventListener('click', ()=>{
+    document.getElementById('pwaInstall').classList.remove('show');
+    localStorage.setItem('mira-pwa-dismissed', '1');
+  });
+
+  // Online/offline detection
+  function updateOnlineStatus(){
+    const bar = document.getElementById('offlineBar');
+    if(bar){
+      if(!navigator.onLine) bar.classList.add('show');
+      else bar.classList.remove('show');
+    }
+  }
+  window.addEventListener('online', updateOnlineStatus);
+  window.addEventListener('offline', updateOnlineStatus);
+  updateOnlineStatus();
+
+  // Handle PWA shortcuts (briefing/standup launched from home screen)
+  const urlParams = new URLSearchParams(window.location.search);
+  const action = urlParams.get('action');
+  if(action){
+    setTimeout(()=>{
+      if(action==='briefing') runDailyBriefing();
+      if(action==='standup') createStandupWidget();
+    }, 3000); // Wait for MIRA to wake first
+  }
+
+  // Request notification permission for alerts
+  if('Notification' in window && Notification.permission === 'default'){
+    setTimeout(()=>{
+      Notification.requestPermission().then(perm=>{
+        if(perm==='granted') console.log('MIRA notifications enabled');
+      });
+    }, 10000);
+  }
+})();
 
 /* ── CUSTOM CURSOR ── */
 (function(){
