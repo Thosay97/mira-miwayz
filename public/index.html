@@ -201,7 +201,7 @@ canvas{position:fixed;inset:0}
 .s-ok{color:var(--green);border-color:rgba(0,200,120,.35)}
 .s-warn{color:var(--orange);border-color:var(--border-o)}
 .s-info{color:var(--blue);border-color:var(--border-b)}
-#sClock{margin-left:auto;font-size:11px;color:var(--blue);letter-spacing:2px}
+#sClock{font-size:11px;color:var(--blue);letter-spacing:2px}
 
 /* ── DYNAMIC WIDGET SYSTEM ── */
 .hud-widget{
@@ -546,12 +546,14 @@ canvas{position:fixed;inset:0}
     <span class="s-brand">M·I·R·A</span>
     <span style="color:var(--border-o)">|</span>
     <span class="s-pill s-ok">SYSTEMS NOMINAL</span>
-    <span class="s-pill s-warn">SPRINT 29</span>
+    <span class="s-pill s-warn" id="sprintPill">SPRINT 29</span>
     <span class="s-pill s-info">COLOMBO LK</span>
     <span class="s-pill s-info">GROQ · LLAMA 3.3</span>
-    <span id="sClock">--:--:--</span>
-  <button id="mcpToggle" onclick="toggleMCP()" style="background:transparent;border:1px solid rgba(12,166,213,.3);border-radius:10px;padding:2px 10px;color:rgba(12,166,213,.5);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1.5px;transition:all .3s;margin-left:8px">OLLAMA</button>
-  <button id="voiceToggle" onclick="toggleVoice()" style="background:transparent;border:1px solid rgba(247,147,30,.3);border-radius:10px;padding:2px 10px;color:rgba(247,147,30,.5);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1.5px;transition:all .3s;margin-left:4px" title="Voice mode: ElevenLabs saves credits, Browser TTS is free">🔊 BROWSER</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0">
+      <span id="sClock" style="font-size:11px;color:var(--blue);letter-spacing:2px">--:--:--</span>
+      <button id="voiceToggle" onclick="toggleVoice()" title="Toggle voice mode" style="background:transparent;border:1px solid rgba(0,255,170,.3);border-radius:10px;padding:2px 9px;color:rgba(0,255,170,.6);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">⚡ SMART</button>
+      <button id="mcpToggle" onclick="toggleMCP()" style="background:transparent;border:1px solid rgba(247,147,30,.4);border-radius:10px;padding:2px 9px;color:#F7931E;font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">GROQ</button>
+    </div>
   </div>
 
   <!-- Widget Dock (minimized pills) -->
