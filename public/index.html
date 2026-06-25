@@ -34,134 +34,6 @@ canvas{position:fixed;inset:0}
 #particleCanvas{z-index:1;pointer-events:none}
 
 /* ── MOBILE LAYOUT (iPhone optimised) ── */
-@media (max-width: 768px) {
-  /* Hide desktop elements */
-  .dring, #circSVG, #hexSVG, #widgetDock,
-  #addWidgetBtn, #addWidgetModal,
-  .hud-widget, #pTop, #themeToggle { display:none!important; }
-
-  /* Full viewport */
-  html,body { overflow:hidden; touch-action:none; }
-
-  /* Status bar -- compact strip */
-  #statusBar {
-    height:44px; padding:0 12px; gap:8px;
-    background:rgba(2,5,12,.98);
-  }
-  .s-brand { font-size:10px; letter-spacing:3px; }
-  .s-pill { font-size:7px; padding:2px 6px; }
-  #sClock { font-size:10px; }
-  #mcpToggle { font-size:7px; padding:2px 6px; }
-
-  /* Mobile orb -- fixed center, immune to keyboard */
-  #orbWrap {
-    position:fixed!important;
-    width:190px!important; height:190px!important;
-    left:50%!important; top:calc(44px + (100dvh - 44px - 300px) / 2)!important;
-    transform:translateX(-50%)!important;
-    z-index:22!important; margin:0!important;
-  }
-  #orbCanvas { width:190px!important; height:190px!important; }
-  #centerVoid {
-    position:absolute!important; inset:0!important;
-    display:flex!important; flex-direction:column!important;
-    align-items:center!important; justify-content:center!important;
-  }
-
-  /* Desktop panels -- hide all */
-  .dring, #circSVG, #hexSVG, #widgetDock,
-  #addWidgetBtn, #addWidgetModal,
-  .hud-widget, #pTop, #themeToggle,
-  .hud-panel { display:none!important; }
-
-  /* Status bar */
-  #statusBar { height:44px; padding:0 10px; gap:6px; }
-  .s-brand { font-size:9px; letter-spacing:2px; }
-  .s-pill { font-size:7px; padding:2px 5px; }
-  #sClock { font-size:9px; }
-  #mcpToggle { font-size:7px; padding:2px 6px; }
-
-  /* Stage -- full screen behind everything */
-  #stage { display:none!important; }
-
-  /* Chat tray -- pinned to bottom with safe area */
-  #chatTray {
-    position:fixed!important;
-    bottom:0!important; left:0!important; right:0!important;
-    height:60px!important;
-    padding:8px 10px!important;
-    padding-bottom:max(8px, env(safe-area-inset-bottom))!important;
-    gap:5px!important;
-    display:flex!important;
-    align-items:center!important;
-    background:rgba(2,5,12,.98)!important;
-    border-top:1px solid rgba(247,147,30,.15)!important;
-    z-index:40!important;
-    transform:none!important;
-    opacity:1!important;
-    pointer-events:all!important;
-  }
-  .sinp {
-    font-size:13px!important; padding:7px 8px!important;
-    min-width:0!important; flex:1!important;
-  }
-  .sbtn {
-    font-size:9px!important; padding:7px 7px!important;
-    letter-spacing:.5px!important; white-space:nowrap!important;
-    flex-shrink:0!important;
-  }
-  #micB { padding:7px 10px!important; flex-shrink:0!important; }
-  #teamsBtn { padding:7px 7px!important; font-size:8px!important; letter-spacing:.5px!important; }
-
-  /* Chat output -- above tray */
-  #chatOut {
-    position:fixed!important;
-    bottom:60px!important; left:10px!important; right:10px!important;
-    max-height:60px!important; font-size:11px!important;
-    z-index:39!important;
-  }
-
-  /* Waveform -- above chat */
-  #wvWrap { bottom:68px!important; }
-  #ticker { display:none!important; }
-
-  /* Mobile action row -- above card strip */
-  #mobileActions {
-    position:fixed!important;
-    bottom:242px!important; left:10px!important; right:10px!important;
-    z-index:28!important;
-    display:flex!important; gap:5px!important; justify-content:center!important;
-    flex-wrap:nowrap!important;
-  }
-  .mob-action {
-    font-size:8px!important; padding:4px 8px!important;
-    letter-spacing:.5px!important; flex-shrink:0!important;
-  }
-
-  /* Mobile dashboard cards -- fixed strip above action row */
-  #mobileDash {
-    position:fixed!important;
-    bottom:60px!important; left:0!important; right:0!important;
-    height:170px!important;
-    z-index:25!important;
-    display:flex!important; gap:8px!important; padding:6px 12px!important;
-    align-items:stretch!important;
-    overflow-x:auto!important; overflow-y:hidden!important;
-    scroll-snap-type:x mandatory!important;
-    -webkit-overflow-scrolling:touch!important;
-    scrollbar-width:none!important;
-    background:rgba(2,5,12,.9)!important;
-    border-top:1px solid rgba(247,147,30,.1)!important;
-  }
-  #mobileDash::-webkit-scrollbar { display:none!important; }
-  .mobile-card {
-    flex-shrink:0!important; scroll-snap-align:start!important;
-    min-width:145px!important; max-width:155px!important;
-    height:auto!important;
-  }
-
-  /* Bottom sheet */
-  #mobileSheet { position:fixed!important; inset:0!important; z-index:60!important; }
 
 /* ── PWA INSTALL BANNER ── */
 #pwaInstall{
@@ -679,6 +551,7 @@ canvas{position:fixed;inset:0}
     <span class="s-pill s-info">GROQ · LLAMA 3.3</span>
     <span id="sClock">--:--:--</span>
   <button id="mcpToggle" onclick="toggleMCP()" style="background:transparent;border:1px solid rgba(12,166,213,.3);border-radius:10px;padding:2px 10px;color:rgba(12,166,213,.5);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1.5px;transition:all .3s;margin-left:8px">OLLAMA</button>
+  <button id="voiceToggle" onclick="toggleVoice()" style="background:transparent;border:1px solid rgba(247,147,30,.3);border-radius:10px;padding:2px 10px;color:rgba(247,147,30,.5);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1.5px;transition:all .3s;margin-left:4px" title="Voice mode: ElevenLabs saves credits, Browser TTS is free">🔊 BROWSER</button>
   </div>
 
   <!-- Widget Dock (minimized pills) -->
@@ -830,57 +703,8 @@ canvas{position:fixed;inset:0}
     M.I.R.A. COMMAND ONLINE &nbsp;&nbsp;&nbsp; OLLAMA · QWEN2.5 · LOCAL AI &nbsp;&nbsp;&nbsp;
   </div></div>
 
-  <!-- MOBILE ACTION ROW -->
-  <div id="mobileActions">
-    <div class="mob-action" onclick="openMobileSheet('gtm')">📊 GTM</div>
-    <div class="mob-action" onclick="openMobileSheet('blockers')">🚨 BLOCKERS</div>
-    <div class="mob-action" onclick="openMobileSheet('standup')">🎯 STANDUP</div>
-    <div class="mob-action teams-btn" onclick="sendToTeams('sprint')">📤 TEAMS</div>
-  </div>
 
-  <!-- MOBILE DASHBOARD CARDS -->
-  <div id="mobileDash">
-    <div class="mobile-card" onclick="openMobileSheet('gtm')">
-      <div class="mc-label">GTM Launch</div>
-      <div class="mc-val" id="mGtmDays">—</div>
-      <div class="mc-sub">DAYS TO JULY 12</div>
-      <div class="mc-bars">
-        <div class="mc-bar-row"><span class="mc-bar-lbl">DONE</span><div class="mc-bar-track"><div class="mc-bar-fill" id="mBD" style="width:0%;background:#00ffaa"></div></div><span class="mc-bar-val p-ok" id="mBDp">0%</span></div>
-        <div class="mc-bar-row"><span class="mc-bar-lbl">BLKD</span><div class="mc-bar-track"><div class="mc-bar-fill" id="mBB" style="width:0%;background:#F7931E"></div></div><span class="mc-bar-val p-warn" id="mBBp">0%</span></div>
-      </div>
-    </div>
-    <div class="mobile-card" onclick="openMobileSheet('blockers')">
-      <div class="mc-label">Blockers</div>
-      <div class="mc-val p-warn" id="mBlocked">—</div>
-      <div class="mc-sub" id="mTotalSub">of 0 tickets</div>
-      <div style="margin-top:8px" id="mTopBlocker"><div style="font-size:7px;color:rgba(255,85,68,.6);letter-spacing:.5px">—</div></div>
-    </div>
-    <div class="mobile-card" onclick="openMobileSheet('squads')">
-      <div class="mc-label">Squads</div>
-      <div class="mc-bars" style="margin-top:4px">
-        <div class="mc-bar-row"><span class="mc-bar-lbl">SQ1</span><div class="mc-bar-track"><div class="mc-bar-fill" id="mSq1" style="width:0%;background:#F7931E"></div></div><span class="mc-bar-val" id="mSq1v">—</span></div>
-        <div class="mc-bar-row"><span class="mc-bar-lbl">SQ2</span><div class="mc-bar-track"><div class="mc-bar-fill" id="mSq2" style="width:0%;background:#0CA6D5"></div></div><span class="mc-bar-val" id="mSq2v">—</span></div>
-        <div class="mc-bar-row"><span class="mc-bar-lbl">SQ3</span><div class="mc-bar-track"><div class="mc-bar-fill" id="mSq3" style="width:0%;background:#00ffaa"></div></div><span class="mc-bar-val" id="mSq3v">—</span></div>
-      </div>
-    </div>
-    <div class="mobile-card" onclick="runDailyBriefing()">
-      <div class="mc-label">Briefing</div>
-      <div style="font-size:22px;margin:6px 0">🌅</div>
-      <div class="mc-sub">TAP TO RUN</div>
-    </div>
-  </div>
 
-  <!-- MOBILE BOTTOM SHEET -->
-  <div id="mobileSheet" onclick="closeMobileSheet(event)">
-    <div id="mobileSheetContent">
-      <div class="sheet-handle"></div>
-      <div class="sheet-header">
-        <span class="sheet-title" id="sheetTitle">DETAILS</span>
-        <span class="sheet-close" onclick="closeMobileSheet()">✕</span>
-      </div>
-      <div class="sheet-body" id="sheetBody"></div>
-    </div>
-  </div>
 
   <div id="chatOut"></div>
   <div id="chatTray">
@@ -975,19 +799,8 @@ function startActivation(){
     speechSynthesis.cancel();
   }
 
-  // Unlock Web Audio immediately in tap context
-  try{
-    var tapAC = new(window.AudioContext||window.webkitAudioContext)();
-    var buf = tapAC.createBuffer(1,1,22050);
-    var src = tapAC.createBufferSource();
-    src.buffer = buf;
-    src.connect(tapAC.destination);
-    src.start(0);
-    tapAC.resume();
-  }catch(e){}
-
   playActivationSound();
-  var intro=document.getElementById('introScreen');
+  const intro=document.getElementById('introScreen');
   const overlay=document.getElementById('activationOverlay');
   const bar=document.getElementById('actBar');
   const log=document.getElementById('actLog');
@@ -1042,27 +855,9 @@ function revealMainUI(){
   const days=Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5));
   const greetingMsg='Hello! I am MIRA, your MiWayz Intelligence and Resource Advisor. Great to have you here. We have '+days+' days until the Colombo GTM launch. How can I help you today?';
 
-  // On iOS -- pre-unlock audio element in tap context, then speak after boot
-  if(typeof isMobile!=='undefined'&&isMobile){
-    // Create and unlock a silent audio element NOW while in gesture context
-    var iosAudioUnlock = new Audio();
-    iosAudioUnlock.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
-    iosAudioUnlock.volume = 0.01;
-    iosAudioUnlock.play().then(()=>{
-      iosAudioUnlock.pause();
-      console.log('iOS audio unlocked');
-    }).catch(e=>console.log('iOS audio unlock failed:',e));
-
-    fetchJira(); // background
-    setTimeout(()=>{
-      addMsg('ai','');
-      setTimeout(()=>speakAndDisplay(greetingMsg), 400);
-    }, 1400);
-  } else {
-    fetchJira().then(()=>{
-      setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(greetingMsg),200);},1000);
-    });
-  }
+  fetchJira().then(()=>{
+    setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(greetingMsg, true),200);},1000);
+  });
 }
 
 /* ── BACKGROUND ── */
@@ -1220,14 +1015,7 @@ async function speakWithElevenLabs(text,onWordCb){
     if(arrayBuf.byteLength<1000){console.error('Audio too small, falling back');speakBrowser(text,onWordCb);return;}
     const blob=new Blob([arrayBuf],{type:'audio/mpeg'});
     const url=URL.createObjectURL(blob);
-    // On iOS reuse the pre-unlocked audio element if available
-    if(typeof iosAudioUnlock!=='undefined' && iosAudioUnlock){
-      currentAudio = iosAudioUnlock;
-      currentAudio.src = url;
-      iosAudioUnlock = null;
-    } else {
-      currentAudio=new Audio(url);
-    }
+    currentAudio=new Audio(url);
     currentAudio.addEventListener('canplaythrough',()=>{
       console.log('Audio ready, duration:',currentAudio.duration,'s');
       const dur=currentAudio.duration*1000;
@@ -1262,13 +1050,11 @@ function speakBrowser(text,onWordCb){
   else{speechSynthesis.onvoiceschanged=()=>{speechSynthesis.onvoiceschanged=null;doSpeak();};}
 }
 
-function speakAndDisplay(text){
+function speakAndDisplay(text, isImportant=false){
   const orbEl=document.getElementById('orbStatusText');
   const chatOut=document.getElementById('chatOut');
-  speakWithElevenLabs(text,(word,i,total)=>{
-    /* Flash word in orb */
+  function onWord(word,i,total){
     if(orbEl){const clean=word.replace(/[^a-zA-Z0-9]/g,'');if(clean)orbEl.textContent=clean.toUpperCase();}
-    /* Typewriter in last chat message */
     const msgs=chatOut.querySelectorAll('.maj');
     const last=msgs[msgs.length-1];
     if(last){
@@ -1277,13 +1063,14 @@ function speakAndDisplay(text){
       chatOut.scrollTop=chatOut.scrollHeight;
     }
     if(i===total-1){clearTimeout(displayTimeout);displayTimeout=setTimeout(()=>{if(orbEl)orbEl.textContent='ONLINE';},2000);}
-  });
+  }
+  smartSpeak(text, onWord, isImportant);
 }
 
 /* ── JIRA ── */
 var liveJira=null;
 async function fetchJira(){
-  try{const res=await fetch('/api/jira');if(!res.ok)return;const data=await res.json();if(data.error)return;liveJira=data;updateHUD(data);if(typeof isMobile!=='undefined'&&isMobile)updateMobileCards(data);}catch(e){}
+  try{const res=await fetch('/api/jira');if(!res.ok)return;const data=await res.json();if(data.error)return;liveJira=data;updateHUD(data);}catch(e){}
 }
 function updateHUD(d){
   document.getElementById('gtmV').textContent=d.gtmDays;
@@ -1397,6 +1184,56 @@ function addMsg(role,text){
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
 
+/* ── VOICE MODE TOGGLE ── */
+// voiceMode: 'elevenlabs' = use ElevenLabs API (costs credits)
+//            'browser'    = use free browser TTS
+//            'smart'      = ElevenLabs for intro/alerts only, browser for chat
+var voiceMode = 'smart'; // default -- saves credits during build/test
+
+function toggleVoice(){
+  const btn = document.getElementById('voiceToggle');
+  const modes = ['smart','elevenlabs','browser'];
+  const labels = {
+    smart:       '⚡ SMART',
+    elevenlabs:  '🎙 ELEVEN',
+    browser:     '🔊 BROWSER',
+  };
+  const colors = {
+    smart:      'rgba(0,255,170,.6)',
+    elevenlabs: '#F7931E',
+    browser:    'rgba(12,166,213,.5)',
+  };
+  const idx = modes.indexOf(voiceMode);
+  voiceMode = modes[(idx+1) % modes.length];
+  if(btn){
+    btn.textContent = labels[voiceMode];
+    btn.style.color = colors[voiceMode];
+    btn.style.borderColor = colors[voiceMode].replace('.6','.3').replace('.5','.25');
+  }
+  const modeDesc = {
+    smart: 'Smart mode -- ElevenLabs for intro and alerts only, browser TTS for chat. Saves credits.',
+    elevenlabs: 'ElevenLabs mode -- full Aria voice for everything. Best quality, uses credits.',
+    browser: 'Browser TTS mode -- free, uses system voice for everything.',
+  };
+  addMsg('ai', modeDesc[voiceMode]);
+}
+
+// Smart speak -- routes based on voiceMode and importance
+function smartSpeak(text, onWordCb, isImportant=false){
+  if(voiceMode === 'elevenlabs'){
+    speakWithElevenLabs(text, onWordCb);
+  } else if(voiceMode === 'browser'){
+    speakBrowser(text, onWordCb);
+  } else {
+    // smart mode -- ElevenLabs for intro/alerts, browser for regular chat
+    if(isImportant){
+      speakWithElevenLabs(text, onWordCb);
+    } else {
+      speakBrowser(text, onWordCb);
+    }
+  }
+}
+
 /* ── MCP MODE TOGGLE ── */
 var mcpMode = true; // Claude+Rovo is default
 function toggleMCP(){
@@ -1424,6 +1261,13 @@ window.addEventListener('load', ()=>{
     btn.textContent = 'GROQ';
     btn.style.color = '#F7931E';
     btn.style.borderColor = 'rgba(247,147,30,.6)';
+  }
+  // Set initial voice toggle label
+  const vbtn = document.getElementById('voiceToggle');
+  if(vbtn){
+    vbtn.textContent = '⚡ SMART';
+    vbtn.style.color = 'rgba(0,255,170,.6)';
+    vbtn.style.borderColor = 'rgba(0,255,170,.3)';
   }
 });
 
@@ -2129,7 +1973,7 @@ async function runDailyBriefing(auto=false){
 
     // Speak the briefing
     addMsg('ai','');
-    setTimeout(()=>speakAndDisplay(data.speech),100);
+    setTimeout(()=>speakAndDisplay(data.speech, true),100);
   }catch(e){ addMsg('ai','Briefing failed: '+e.message); }
   orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
 }
@@ -2227,142 +2071,9 @@ async function send(){
     addMsg('ai','');setTimeout(()=>speakAndDisplay(reply),100);
   }catch(e){addMsg('ai','Connection error. Make sure the server is running on port 3001 and Ollama is active.');}
   orbState='active';document.getElementById('orbStatusText').textContent='ONLINE';
-  // iOS -- blur input to close keyboard after sending
-  if(isMobile) document.getElementById('sinp')?.blur();
 }
 
-/* ── MOBILE DETECTION ── */
-var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
 
-/* ── MOBILE SHEET ── */
-function openMobileSheet(type){
-  if(!isMobile) return;
-  const sheet = document.getElementById('mobileSheet');
-  const title = document.getElementById('sheetTitle');
-  const body = document.getElementById('sheetBody');
-  if(!sheet) return;
-
-  sheet.classList.add('open');
-
-  if(type==='gtm'){
-    title.textContent='GTM LAUNCH';
-    const d = liveJira||{};
-    body.innerHTML = `
-      <div style="text-align:center;margin-bottom:16px">
-        <div style="font-family:'Orbitron',monospace;font-size:48px;color:var(--orange)">${d.gtmDays||'—'}</div>
-        <div style="font-size:9px;color:var(--text-dim);letter-spacing:2px">DAYS UNTIL JULY 12 · COLOMBO</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-        ${[['DONE','#00ffaa',d.done||0,d.donePercent||0],['REVIEW','#0CA6D5',(d.codeReview||0)+(d.readyForQA||0)+(d.inQA||0),d.reviewPercent||0],['BLOCKED','#F7931E',d.blocked||0,d.blockedPercent||0],['TODO','rgba(12,166,213,.4)',d.toDo||0,d.todoPercent||0]].map(([l,c,v,p])=>`
-          <div style="border:1px solid rgba(247,147,30,.15);border-radius:8px;padding:10px;text-align:center">
-            <div style="font-family:'Orbitron',monospace;font-size:22px;color:${c}">${v}</div>
-            <div style="font-size:7px;color:var(--text-dim);letter-spacing:1px;margin-top:2px">${l} (${p}%)</div>
-          </div>`).join('')}
-      </div>
-      ${d.sprintGoal?`<div style="font-size:10px;color:rgba(12,166,213,.6);border-left:2px solid rgba(247,147,30,.3);padding-left:10px;line-height:1.6">${d.sprintGoal}</div>`:''}`;
-  }
-  else if(type==='blockers'){
-    title.textContent='BLOCKERS WATCH';
-    const tickets = liveJira?.blockedTickets||[];
-    body.innerHTML = `
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">${liveJira?.blocked||0} blocked of ${liveJira?.total||0} total</div>
-      ${tickets.length===0?'<div style="color:rgba(0,255,170,.6);font-size:11px">No blockers! Great work team.</div>':
-        tickets.map(t=>`
-          <div style="border:1px solid rgba(255,85,68,.15);border-radius:8px;padding:10px;margin-bottom:8px;background:rgba(255,85,68,.04)">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <a href="https://miwayz.atlassian.net/browse/${t.key}" target="_blank" style="font-family:'Orbitron',monospace;font-size:11px;color:#F7931E;text-decoration:none">${t.key}</a>
-              <span style="font-size:8px;color:rgba(255,85,68,.6);border:1px solid rgba(255,85,68,.2);border-radius:4px;padding:2px 6px">BLOCKED</span>
-            </div>
-            <div style="font-size:10px;color:var(--text-dim);line-height:1.4">${t.summary}</div>
-            <div style="font-size:9px;color:rgba(12,166,213,.5);margin-top:4px">👤 ${t.assignee}</div>
-          </div>`).join('')}`;
-  }
-  else if(type==='squads'){
-    title.textContent='SQUAD PROGRESS';
-    const sq = liveJira?.squads||{};
-    const squads = [
-      {name:'Squad 1',key:'sq1',color:'#F7931E',members:'Jaliya · Kukeenthan · Ashfak · Sujanthan'},
-      {name:'Squad 2',key:'sq2',color:'#0CA6D5',members:'Chethana · Husni · Yuvanshan'},
-      {name:'Squad 3',key:'sq3',color:'#00ffaa',members:'Sineth · Thanuja · Thajun'},
-      {name:'QA',key:'qa',color:'rgba(12,166,213,.6)',members:'Shanilka · Umar · Nadee · Dilip · Kasuni'},
-    ];
-    body.innerHTML = squads.map(s=>{
-      const d = sq[s.key]||{done:0,total:0,pct:0};
-      return `<div style="margin-bottom:14px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <span style="font-size:10px;color:${s.color};letter-spacing:1.5px;font-weight:600">${s.name}</span>
-          <span style="font-size:10px;color:var(--text-dim)">${d.done}/${d.total}</span>
-        </div>
-        <div style="height:8px;background:rgba(0,12,28,.9);border-radius:4px;overflow:hidden;margin-bottom:4px">
-          <div style="height:100%;width:${d.pct}%;background:${s.color};border-radius:4px;transition:width 1s ease"></div>
-        </div>
-        <div style="font-size:8px;color:var(--text-dim)">${s.members}</div>
-      </div>`;
-    }).join('');
-  }
-  else if(type==='standup'){
-    title.textContent='STANDUP';
-    body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-dim);font-size:10px;letter-spacing:1px">GENERATING...</div>';
-    fetch('/api/standup').then(r=>r.json()).then(data=>{
-      const colors = {'Squad 1':'#F7931E','Squad 2':'#0CA6D5','Squad 3':'#00ffaa'};
-      body.innerHTML = `<div style="font-size:9px;color:var(--text-dim);margin-bottom:12px">${data.sprint} · ${data.gtmDays} days to GTM</div>` +
-        Object.entries(data.standup||{}).map(([sq,d])=>`
-          <div style="margin-bottom:14px;border-left:2px solid ${colors[sq]||'#F7931E'};padding-left:10px">
-            <div style="font-size:10px;color:${colors[sq]||'#F7931E'};letter-spacing:2px;margin-bottom:6px;font-weight:600">${sq.toUpperCase()}</div>
-            <div style="display:flex;gap:12px;font-size:10px">
-              <span style="color:#00ffaa">✓ ${d.done?.length||0} done</span>
-              <span style="color:#0CA6D5">⟳ ${d.inProgress?.length||0} prog</span>
-              ${d.blocked?.length>0?`<span style="color:#ff5544">⚠ ${d.blocked.length} blkd</span>`:''}
-            </div>
-            ${d.blocked?.slice(0,2).map(t=>`<div style="font-size:9px;color:rgba(255,85,68,.6);margin-top:3px">• ${t.key} (${t.assignee})</div>`).join('')||''}
-          </div>`).join('') +
-        `<button onclick="sendToTeams('sprint');closeMobileSheet()" style="width:100%;margin-top:8px;background:transparent;border:1px solid rgba(100,140,255,.3);border-radius:8px;padding:10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:1.5px">📤 POST TO TEAMS</button>`;
-    }).catch(()=>{ body.innerHTML='<div style="color:#ff5544">Failed to load standup</div>'; });
-  }
-}
-
-function closeMobileSheet(e){
-  if(e && document.getElementById('mobileSheetContent')?.contains(e.target)) return;
-  document.getElementById('mobileSheet')?.classList.remove('open');
-}
-
-/* Touch swipe down to close sheet */
-(function(){
-  let startY=0;
-  document.addEventListener('touchstart',e=>{
-    if(document.getElementById('mobileSheet')?.classList.contains('open')) startY=e.touches[0].clientY;
-  });
-  document.addEventListener('touchend',e=>{
-    if(document.getElementById('mobileSheet')?.classList.contains('open')){
-      const diff = e.changedTouches[0].clientY - startY;
-      if(diff > 80) closeMobileSheet();
-    }
-  });
-})();
-
-/* Update mobile cards from Jira data */
-function updateMobileCards(d){
-  if(!isMobile) return;
-  const s=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
-  const sw=(id,w)=>{const el=document.getElementById(id);if(el)el.style.width=w+'%';};
-  s('mGtmDays', d.gtmDays||'—');
-  s('mBlocked', d.blocked||'—');
-  s('mTotalSub', 'of '+(d.total||0)+' tickets');
-  s('mBDp', (d.donePercent||0)+'%');
-  s('mBBp', (d.blockedPercent||0)+'%');
-  sw('mBD', d.donePercent||0);
-  sw('mBB', d.blockedPercent||0);
-  // Top blocker
-  const tb = d.blockedTickets?.[0];
-  const tbEl = document.getElementById('mTopBlocker');
-  if(tbEl && tb) tbEl.innerHTML = `<div style="font-size:8px;color:rgba(255,85,68,.7)">${tb.key}</div><div style="font-size:7px;color:rgba(255,255,255,.3)">${tb.summary?.substring(0,30)||''}</div>`;
-  // Squad bars
-  if(d.squads){
-    sw('mSq1', d.squads.sq1?.pct||0); s('mSq1v', (d.squads.sq1?.done||0)+'/'+(d.squads.sq1?.total||0));
-    sw('mSq2', d.squads.sq2?.pct||0); s('mSq2v', (d.squads.sq2?.done||0)+'/'+(d.squads.sq2?.total||0));
-    sw('mSq3', d.squads.sq3?.pct||0); s('mSq3v', (d.squads.sq3?.done||0)+'/'+(d.squads.sq3?.total||0));
-  }
-}
 
 /* ── PWA REGISTRATION ── */
 (function(){
