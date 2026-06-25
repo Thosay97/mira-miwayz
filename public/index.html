@@ -237,6 +237,10 @@ canvas{position:fixed;inset:0}
 .wc-btn:hover{background:rgba(247,147,30,.12);color:var(--orange);border-color:rgba(247,147,30,.6)}
 .wc-btn.max-btn:hover{background:rgba(12,166,213,.12);color:var(--blue);border-color:rgba(12,166,213,.6)}
 .wc-btn.close-btn:hover{background:rgba(255,50,50,.12);color:#ff5555;border-color:#ff5555}
+.wc-btn.pin-btn{font-size:9px;opacity:.35;transition:all .2s}
+.wc-btn.pin-btn:hover{opacity:1;background:rgba(247,147,30,.1)}
+.wc-btn.pin-btn.pinned{opacity:1;color:#F7931E;border-color:rgba(247,147,30,.6);background:rgba(247,147,30,.1)}
+.wc-btn.pin-btn.pinned:hover{background:rgba(255,50,50,.1);color:#ff5555;border-color:#ff5555}
 
 .widget-body{
   background:var(--panel-bg);
@@ -581,6 +585,7 @@ canvas{position:fixed;inset:0}
       <span style="font-size:10px;opacity:.5">⠿</span>
       <span class="widget-title">GTM Launch</span>
       <div class="widget-controls">
+        <button class="wc-btn pin-btn" id="pin_wGTM" onclick="togglePin('wGTM')" title="Pin widget -- stays after restart">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('wGTM')" title="Maximize">⤢</button>
         <button class="wc-btn" onclick="minimizeWidget('wGTM')" title="Minimize">─</button>
         <button class="wc-btn close-btn" onclick="closeWidget('wGTM')" title="Close">✕</button>
@@ -605,9 +610,10 @@ canvas{position:fixed;inset:0}
       <span style="font-size:10px;opacity:.5">⠿</span>
       <span class="widget-title">Sprint 29 · Blockers</span>
       <div class="widget-controls">
+        <button class="wc-btn pin-btn" id="pin_wBLK" onclick="togglePin('wBLK')" title="Pin widget -- stays after restart">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('wBLK')" title="Maximize">⤢</button>
         <button class="wc-btn" onclick="minimizeWidget('wBLK')" title="Minimize">─</button>
-        <button class="wc-btn close-btn" onclick="closeWidget('wBLK')" title="Close">✕</button>
+        <button class="wc-btn close-btn" onclick="closeWidget('wBLK')" title="Close (unpin first)">✕</button>
       </div>
     </div>
     <div class="widget-body">
@@ -631,9 +637,10 @@ canvas{position:fixed;inset:0}
       <span style="font-size:10px;opacity:.5">⠿</span>
       <span class="widget-title">Squad Progress</span>
       <div class="widget-controls">
+        <button class="wc-btn pin-btn" id="pin_wSQ" onclick="togglePin('wSQ')" title="Pin widget -- stays after restart">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('wSQ')" title="Maximize">⤢</button>
         <button class="wc-btn" onclick="minimizeWidget('wSQ')" title="Minimize">─</button>
-        <button class="wc-btn close-btn" onclick="closeWidget('wSQ')" title="Close">✕</button>
+        <button class="wc-btn close-btn" onclick="closeWidget('wSQ')" title="Close (unpin first)">✕</button>
       </div>
     </div>
     <div class="widget-body">
@@ -657,9 +664,10 @@ canvas{position:fixed;inset:0}
       <span style="font-size:10px;opacity:.5">⠿</span>
       <span class="widget-title">Active Epics</span>
       <div class="widget-controls">
+        <button class="wc-btn pin-btn" id="pin_wEP" onclick="togglePin('wEP')" title="Pin widget -- stays after restart">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('wEP')" title="Maximize">⤢</button>
         <button class="wc-btn" onclick="minimizeWidget('wEP')" title="Minimize">─</button>
-        <button class="wc-btn close-btn" onclick="closeWidget('wEP')" title="Close">✕</button>
+        <button class="wc-btn close-btn" onclick="closeWidget('wEP')" title="Close (unpin first)">✕</button>
       </div>
     </div>
     <div class="widget-body">
@@ -1335,6 +1343,73 @@ var WIDGET_DEFAULTS = {
 };
 
 // Load saved positions from localStorage
+/* ── WIDGET PIN SYSTEM ── */
+// Pinned widgets are saved permanently and restored on every restart
+// Unpinned widgets are temporary and close on restart
+
+function getPinnedState(){
+  try{ return JSON.parse(localStorage.getItem('mira-pinned')||'{}'); }
+  catch(e){ return {}; }
+}
+
+function savePinnedState(){
+  const pinned = {};
+  document.querySelectorAll('.hud-widget').forEach(w=>{
+    if(w.classList.contains('pinned-widget')){
+      pinned[w.id] = {
+        x: parseInt(w.style.left)||0,
+        y: parseInt(w.style.top)||0,
+        width: w.offsetWidth,
+        minimized: w.classList.contains('minimized'),
+      };
+    }
+  });
+  try{ localStorage.setItem('mira-pinned', JSON.stringify(pinned)); }
+  catch(e){}
+}
+
+function togglePin(id){
+  const w = document.getElementById(id);
+  const btn = document.getElementById('pin_'+id);
+  if(!w) return;
+
+  const isPinned = w.classList.contains('pinned-widget');
+
+  if(isPinned){
+    // Unpin
+    w.classList.remove('pinned-widget');
+    if(btn){ btn.classList.remove('pinned'); btn.title='Pin widget -- stays after restart'; }
+    // Update close button to allow closing
+    const closeBtn = w.querySelector('.close-btn');
+    if(closeBtn) closeBtn.title = 'Close';
+    savePinnedState();
+    addMsg('ai', id.replace('w','') + ' widget unpinned. It will not persist after restart.');
+  } else {
+    // Pin
+    w.classList.add('pinned-widget');
+    if(btn){ btn.classList.add('pinned'); btn.title='Unpin widget'; }
+    const closeBtn = w.querySelector('.close-btn');
+    if(closeBtn) closeBtn.title = 'Unpin first to close';
+    savePinnedState();
+    addMsg('ai', id.replace('w','') + ' widget pinned. Position and state will be saved permanently.');
+  }
+}
+
+function closeWidget(id){
+  const w = document.getElementById(id);
+  if(!w) return;
+  // Block closing if pinned
+  if(w.classList.contains('pinned-widget')){
+    addMsg('ai','Unpin the widget first before closing.');
+    // Shake the pin button to hint
+    const btn = document.getElementById('pin_'+id);
+    if(btn){ btn.style.transform='scale(1.3)'; setTimeout(()=>btn.style.transform='',300); }
+    return;
+  }
+  w.classList.add('closed'); w.classList.remove('on','minimized','maximized');
+  updateDock(); saveWidgetState();
+}
+
 function loadWidgetState(){
   try{
     const saved = JSON.parse(localStorage.getItem('mira-widgets')||'{}');
@@ -1355,6 +1430,8 @@ function saveWidgetState(){
     };
   });
   try{localStorage.setItem('mira-widgets',JSON.stringify(state));}catch(e){}
+  // Also save pinned state whenever position changes
+  savePinnedState();
 }
 
 function initWidgets(){
@@ -1369,19 +1446,35 @@ function initWidgets(){
     wEP:   {x:vw-240, y:vh-300},
   };
 
-  // Try load saved state
+  // Load both regular state and pinned state
   let saved={};
   try{saved=JSON.parse(localStorage.getItem('mira-widgets')||'{}');}catch(e){}
+  const pinned = getPinnedState();
 
   widgets.forEach(w=>{
     const id=w.id;
-    const pos = saved[id]||positions[id]||{x:20,y:56};
-    w.style.left = pos.x+'px';
-    w.style.top  = pos.y+'px';
-    if(pos.w) w.style.width = pos.w+'px';
-    if(saved[id]?.minimized) w.classList.add('minimized');
-    if(saved[id]?.visible===false) w.classList.add('closed');
-    else w.classList.add('on');
+    // Pinned widgets always restore from pinned state
+    if(pinned[id]){
+      w.classList.add('pinned-widget','on');
+      w.style.left = pinned[id].x+'px';
+      w.style.top  = pinned[id].y+'px';
+      if(pinned[id].width) w.style.width = pinned[id].width+'px';
+      if(pinned[id].minimized) w.classList.add('minimized');
+      // Update pin button appearance
+      const btn = document.getElementById('pin_'+id);
+      if(btn){ btn.classList.add('pinned'); btn.title='Unpin widget'; }
+      const closeBtn = w.querySelector('.close-btn');
+      if(closeBtn) closeBtn.title = 'Unpin first to close';
+    } else {
+      // Non-pinned -- restore from regular saved state
+      const pos = saved[id]||positions[id]||{x:20,y:56};
+      w.style.left = pos.x+'px';
+      w.style.top  = pos.y+'px';
+      if(pos.w) w.style.width = pos.w+'px';
+      if(saved[id]?.minimized) w.classList.add('minimized');
+      if(saved[id]?.visible===false) w.classList.add('closed');
+      else w.classList.add('on');
+    }
   });
 
   updateDock();
@@ -1559,11 +1652,7 @@ function maximizeWidget(id){
 }
 
 /* ── CLOSE / REOPEN ── */
-function closeWidget(id){
-  const w=document.getElementById(id);
-  w.classList.add('closed');w.classList.remove('on','minimized','maximized');
-  updateDock();saveWidgetState();
-}
+// closeWidget is now in the pin system above
 
 function addWidget(type){
   const map={gtm:'wGTM',blockers:'wBLK',squads:'wSQ',epics:'wEP'};
@@ -1623,9 +1712,10 @@ function createDynWidget(title, bodyHTML, opts={}){
       <span style="font-size:10px;opacity:.5">⠿</span>
       <span class="widget-title">${title}</span>
       <div class="widget-controls">
+        <button class="wc-btn pin-btn" id="pin_${id}" onclick="togglePin('${id}')" title="Pin widget">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('${id}')" title="Maximize">⤢</button>
         <button class="wc-btn" onclick="minimizeWidget('${id}')" title="Minimize">─</button>
-        <button class="wc-btn close-btn" onclick="this.closest('.hud-widget').remove()" title="Close">✕</button>
+        <button class="wc-btn close-btn" onclick="closeWidget('${id}')" title="Close">✕</button>
       </div>
     </div>
     <div class="widget-body" id="${id}_body">
