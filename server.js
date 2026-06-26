@@ -694,17 +694,42 @@ app.get('/api/sprint/search/:name', async (req, res) => {
 /* ── DYNAMIC WIDGET: Custom JQL ── */
 app.post('/api/jql', async (req, res) => {
   if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
-  const { jql, maxResults = 50 } = req.body;
+  let { jql, maxResults = 100 } = req.body;
   if (!jql) return res.status(400).json({ error: 'jql required' });
   const base = process.env.JIRA_BASE_URL;
   const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+
   try {
+    // Replace openSprints() / openSprints with actual active sprint ID
+    // so the regular search API can handle it
+    if (jql.includes('openSprints') || jql.includes('activeSprint')) {
+      try {
+        const sprintData = await fetch(`${base}/rest/agile/1.0/board/154/sprint?state=active`, {
+          headers: { 'Authorization': auth, 'Accept': 'application/json' }
+        }).then(r=>r.json());
+        const sprintId = sprintData.values?.[0]?.id;
+        if (sprintId) {
+          jql = jql.replace(/sprint\s+in\s+openSprints\(\)/gi, `sprint = ${sprintId}`);
+          jql = jql.replace(/sprint\s*=\s*openSprints\(\)/gi, `sprint = ${sprintId}`);
+          jql = jql.replace(/openSprints\(\)/gi, `sprint = ${sprintId}`);
+          jql = jql.replace(/activeSprint\(\)/gi, `sprint = ${sprintId}`);
+          console.log('JQL resolved to:', jql);
+        }
+      } catch(e) { console.warn('Could not resolve sprint ID:', e.message); }
+    }
+
     const encoded = encodeURIComponent(jql);
     const r = await fetch(`${base}/rest/api/3/search/jql?jql=${encoded}&maxResults=${maxResults}&fields=summary,status,assignee,priority,issuetype`, {
       headers: { 'Authorization': auth, 'Accept': 'application/json' }
     });
-    if (!r.ok) { const e=await r.text(); return res.status(r.status).json({ error: 'Jira error: '+e }); }
+    if (!r.ok) {
+      const e = await r.text();
+      console.error('Jira JQL error:', e);
+      return res.status(r.status).json({ error: 'Jira error: ' + r.status, detail: e });
+    }
     const data = await r.json();
+    console.log(`JQL returned ${data.total} total, ${data.issues?.length} fetched`);
+
     const issues = (data.issues||[]).map(i => ({
       key: i.key,
       summary: i.fields?.summary||'',
@@ -714,17 +739,30 @@ app.post('/api/jql', async (req, res) => {
       type: i.fields?.issuetype?.name||'',
       bucket: bucketForStatus(i.fields?.status?.name||''),
     }));
-    // Build chart data
-    const byStatus = {};
-    const byAssignee = {};
-    const byType = {};
+
+    // Build chart data from fetched issues (not just data.total)
+    const byStatus = {}, byAssignee = {}, byType = {};
     issues.forEach(i => {
       byStatus[i.status] = (byStatus[i.status]||0)+1;
-      byAssignee[i.assignee] = (byAssignee[i.assignee]||0)+1;
+      // Shorten assignee to first name for cleaner charts
+      const firstName = i.assignee.split(' ')[0];
+      byAssignee[firstName] = (byAssignee[firstName]||0)+1;
       byType[i.type] = (byType[i.type]||0)+1;
     });
-    res.json({ issues, total: data.total, byStatus, byAssignee, byType, jql });
-  } catch(err) { res.status(500).json({ error: err.message }); }
+
+    res.json({
+      issues,
+      total: data.total ?? issues.length,
+      fetched: issues.length,
+      byStatus,
+      byAssignee,
+      byType,
+      jql
+    });
+  } catch(err) {
+    console.error('JQL error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ── INTENT PARSER: Detect widget commands from chat ── */
@@ -757,9 +795,11 @@ Intents:
 
 Examples:
 "compare sprint 27 and 28" -> {"intent":"sprint_compare","sprints":["Sprint 27","Sprint 28"]}
-"show blocked tickets for Jaliya" -> {"intent":"jql_widget","jql":"project=MICT AND sprint in openSprints() AND status=Blocked AND assignee='Jaliya Lamahewa'","title":"Blocked - Jaliya"}
-"show me a pie chart of ticket status" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"pie","groupBy":"status","title":"Sprint Status"}
-"bar chart of tickets by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint in openSprints()","chartType":"bar","groupBy":"assignee","title":"Tickets by Assignee"}
+"show blocked tickets for Jaliya" -> {"intent":"jql_widget","jql":"project=MICT AND sprint = 1355 AND status=Blocked AND assignee='Jaliya Lamahewa'","title":"Blocked - Jaliya"}
+"show me a pie chart of ticket status" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"pie","groupBy":"status","title":"Sprint Status"}
+"bar chart of tickets by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"bar","groupBy":"assignee","title":"Tickets by Assignee"}
+"pie chart by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"pie","groupBy":"assignee","title":"Tickets by Assignee"}
+"donut chart ticket types" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"donut","groupBy":"type","title":"Ticket Types"}
 "generate standup" -> {"intent":"standup"}
 "show burndown" -> {"intent":"burndown"}
 "morning briefing" -> {"intent":"briefing"}

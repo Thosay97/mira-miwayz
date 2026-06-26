@@ -1852,7 +1852,10 @@ async function createJQLWidget(jql, title, chartType, groupBy){
     if(chartType){
       // Chart widget
       const groupData = groupBy==='status' ? data.byStatus :
-                        groupBy==='assignee' ? data.byAssignee : data.byType;
+                        groupBy==='assignee' ? data.byAssignee :
+                        groupBy==='type' ? data.byType : data.byStatus;
+      // Filter out empty/null keys
+      Object.keys(groupData).forEach(k=>{if(!k||k==='null'||k==='undefined')delete groupData[k];});
       const labels = Object.keys(groupData).slice(0,10);
       const values = labels.map(l=>groupData[l]);
       const cid = 'chart_'+Date.now();
@@ -1902,8 +1905,9 @@ async function createJQLWidget(jql, title, chartType, groupBy){
           <td>${i.assignee.split(' ')[0]}</td>
         </tr>`;
       }).join('');
+      const fetchedCount = data.fetched ?? data.issues?.length ?? 0;
       html = `
-        <div style="font-size:8px;color:var(--text-dim);margin-bottom:6px">${data.total} tickets found<span class="dyn-count">${data.issues.length>20?'(showing 20)':''}</span></div>
+        <div style="font-size:8px;color:var(--text-dim);margin-bottom:6px">${fetchedCount} tickets<span class="dyn-count" style="margin-left:4px">${fetchedCount>20?'(showing 20)':''}</span></div>
         <div style="overflow-x:auto">
           <table class="jql-table">
             <thead><tr><th>KEY</th><th>SUMMARY</th><th>STATUS</th><th>ASSIGNEE</th></tr></thead>
@@ -1913,7 +1917,9 @@ async function createJQLWidget(jql, title, chartType, groupBy){
       createDynWidget(title, html, {width:420});
     }
 
-    addMsg('ai', `Widget ready. Found ${data.total} tickets matching your query.`);
+    const count = data.fetched ?? data.issues?.length ?? 0;
+    const totalStr = data.total && data.total !== count ? ` (${data.total} total in Jira, showing ${count})` : '';
+    addMsg('ai', `Widget ready. Found ${count} tickets${totalStr}.`);
   }catch(e){
     addMsg('ai','Query failed: '+e.message);
   }
