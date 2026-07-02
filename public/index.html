@@ -622,7 +622,7 @@ canvas{position:fixed;inset:0}
   <div class="hud-widget" id="wBLK" data-widget="blockers">
     <div class="widget-header" onmousedown="startDrag(event,'wBLK')">
       <span style="font-size:10px;opacity:.5">⠿</span>
-      <span class="widget-title">Sprint 29 · Blockers</span>
+      <span class="widget-title" id="blkWidgetTitle">Blockers</span>
       <div class="widget-controls">
         <button class="wc-btn pin-btn" id="pin_wBLK" onclick="togglePin('wBLK')" title="Pin widget -- stays after restart">📌</button>
         <button class="wc-btn max-btn" onclick="maximizeWidget('wBLK')" title="Maximize">⤢</button>
@@ -1099,9 +1099,11 @@ async function fetchJira(){
 function updateHUD(d){
   document.getElementById('gtmV').textContent=d.gtmDays;
 
-  // Update sprint name in status bar
+  // Update sprint name in status bar and widget titles
   const sprintPill=document.querySelector('.s-warn');
   if(sprintPill&&d.sprintName) sprintPill.textContent=d.sprintName;
+  const blkTitle=document.getElementById('blkWidgetTitle');
+  if(blkTitle&&d.sprintName) blkTitle.textContent=d.sprintName+' · Blockers';
 
   // Show sprint goal in blockers widget
   if(d.sprintGoal){
@@ -1376,9 +1378,13 @@ function savePinnedState(){
         y: parseInt(w.style.top) || Math.round(rect.top) || 0,
         width: w.offsetWidth || 220,
         minimized: w.classList.contains('minimized'),
-        // Save widget type for dynamic widgets so they can be recreated
+        // Save widget type + creation params for dynamic widgets
         dynType: w.dataset.dynType || null,
         title: w.querySelector('.widget-title')?.textContent || '',
+        jql: w.dataset.jql || null,
+        chartType: w.dataset.chartType || null,
+        groupBy: w.dataset.groupBy || null,
+        wTitle: w.dataset.wTitle || null,
       };
     }
   });
@@ -1517,8 +1523,25 @@ function initWidgets(){
         briefing: ()=>runDailyBriefing(),
         releasenotes: ()=>createReleaseNotesWidget(),
         memory: ()=>createMemoryWidget(),
+        jql: ()=>{ if(state.jql) createJQLWidget(state.jql, state.wTitle||state.title||'Saved Query', state.chartType||null, state.groupBy||null, id); },
       };
-      if(recreate[state.dynType]) setTimeout(()=>recreate[state.dynType](), 1500);
+      if(recreate[state.dynType]){
+        setTimeout(()=>{
+          recreate[state.dynType]();
+          // Re-apply pin + position after recreation
+          setTimeout(()=>{
+            const el=document.getElementById(id) || document.querySelector('.dyn-widget:last-of-type');
+            if(el){
+              el.classList.add('pinned-widget');
+              el.style.left = state.x+'px';
+              el.style.top = state.y+'px';
+              if(state.width) el.style.width = state.width+'px';
+              const pb = el.querySelector('.pin-btn');
+              if(pb) pb.classList.add('pinned');
+            }
+          }, 2500);
+        }, 1500);
+      }
     }
   });
 }
@@ -1888,7 +1911,7 @@ async function createSprintCompare(s1name, s2name){
 }
 
 /* ── JQL WIDGET ── */
-async function createJQLWidget(jql, title, chartType, groupBy){
+async function createJQLWidget(jql, title, chartType, groupBy, restoreId){
   addMsg('ai', `Running query: ${title}...`);
   orbState='thinking'; document.getElementById('orbStatusText').textContent='QUERYING';
 
@@ -1916,7 +1939,12 @@ async function createJQLWidget(jql, title, chartType, groupBy){
       html = `
         <div style="font-size:8px;color:var(--text-dim);margin-bottom:6px">${data.total} tickets · ${jql.substring(0,50)}${jql.length>50?'...':''}</div>
         <div class="chart-wrap"><canvas id="${cid}"></canvas></div>`;
-      const wid = createDynWidget(title, html, {width:320});
+      const wid = createDynWidget(title, html, {width:320, dynType:'jql', fixedId:restoreId});
+      // Store creation params on the widget for pin persistence
+      setTimeout(()=>{
+        const el=document.getElementById(wid);
+        if(el){ el.dataset.jql=jql; el.dataset.chartType=chartType||''; el.dataset.groupBy=groupBy||''; el.dataset.wTitle=title; }
+      },100);
       setTimeout(()=>{
         const ctx = document.getElementById(cid);
         if(ctx && typeof Chart !== 'undefined'){
@@ -1968,7 +1996,11 @@ async function createJQLWidget(jql, title, chartType, groupBy){
             <tbody>${rows}</tbody>
           </table>
         </div>`;
-      createDynWidget(title, html, {width:420});
+      const wid2 = createDynWidget(title, html, {width:420, dynType:'jql', fixedId:restoreId});
+      setTimeout(()=>{
+        const el=document.getElementById(wid2);
+        if(el){ el.dataset.jql=jql; el.dataset.chartType=''; el.dataset.groupBy=''; el.dataset.wTitle=title; }
+      },100);
     }
 
     const count = data.fetched ?? data.issues?.length ?? 0;
