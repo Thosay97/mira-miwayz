@@ -35,6 +35,35 @@ canvas{position:fixed;inset:0}
 
 /* ── MOBILE LAYOUT (iPhone optimised) ── */
 
+/* ── WAR ROOM MODE ── */
+#warRoom{
+  position:fixed;inset:0;z-index:80;
+  background:radial-gradient(ellipse at center, rgba(20,4,2,.97) 0%, rgba(2,1,0,.99) 75%);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  backdrop-filter:blur(10px);
+}
+#warRoom.open{display:flex;animation:wrFadeIn .4s ease}
+@keyframes wrFadeIn{from{opacity:0}to{opacity:1}}
+.wr-title{font-family:'Orbitron',monospace;font-size:15px;letter-spacing:10px;color:#ff5544;margin-bottom:6px;animation:wrPulse 2s ease-in-out infinite}
+@keyframes wrPulse{0%,100%{opacity:.7}50%{opacity:1}}
+.wr-sub{font-size:9px;letter-spacing:4px;color:rgba(247,147,30,.5);margin-bottom:28px}
+#wrCountdown{display:flex;align-items:baseline;gap:8px;margin-bottom:30px}
+.wr-num{font-family:'Orbitron',monospace;font-size:64px;color:#F7931E;text-shadow:0 0 30px rgba(247,147,30,.4)}
+.wr-num.wr-sec{color:#ff5544;text-shadow:0 0 30px rgba(255,85,68,.4)}
+.wr-unit{font-size:12px;color:rgba(255,255,255,.3);letter-spacing:2px;margin-right:10px}
+.wr-score-wrap{display:flex;align-items:center;gap:40px;margin-bottom:30px}
+#wrScore{font-family:'Orbitron',monospace;font-size:52px}
+#wrScoreLabel{font-size:10px;letter-spacing:4px;margin-top:4px}
+.wr-score-caption{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-top:2px}
+.wr-stats{display:flex;gap:36px;margin-bottom:28px}
+.wr-stat{text-align:center}
+.wr-stat-val{font-family:'Orbitron',monospace;font-size:26px;color:#0CA6D5}
+.wr-stat-lbl{font-size:7px;letter-spacing:2px;color:rgba(255,255,255,.35);margin-top:4px}
+#wrBlockers{width:min(560px,86vw);max-height:150px;overflow-y:auto}
+.wr-blocker{display:flex;align-items:center;font-size:10px;padding:6px 10px;border:1px solid rgba(255,85,68,.15);border-radius:4px;margin-bottom:5px;background:rgba(255,85,68,.04)}
+.wr-exit{margin-top:26px;background:transparent;border:1px solid rgba(247,147,30,.3);border-radius:4px;padding:8px 26px;color:rgba(247,147,30,.7);font-family:'Share Tech Mono',monospace;font-size:10px;letter-spacing:3px;cursor:pointer;transition:all .2s}
+.wr-exit:hover{background:rgba(247,147,30,.1);color:#F7931E}
+
 /* ── PWA INSTALL BANNER ── */
 #pwaInstall{
   position:fixed;bottom:70px;left:50%;transform:translateX(-50%);
@@ -565,6 +594,8 @@ canvas{position:fixed;inset:0}
     <span class="s-pill s-info">GROQ · LLAMA 3.3</span>
     <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-shrink:0">
       <span id="sClock" style="font-size:11px;color:var(--blue);letter-spacing:2px">--:--:--</span>
+      <button id="sentinelToggle" onclick="toggleSentinel()" title="Sentinel: MIRA proactively watches Jira and alerts you" style="background:transparent;border:1px solid rgba(0,255,170,.35);border-radius:10px;padding:2px 9px;color:rgba(0,255,170,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">👁 SENTINEL</button>
+      <button id="wakeToggle" onclick="toggleWakeWord()" title="Wake word: say Hey MIRA to command hands-free" style="background:transparent;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:2px 9px;color:rgba(255,255,255,.25);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">🎤 WAKE</button>
       <button id="voiceToggle" onclick="toggleVoice()" title="Toggle voice mode" style="background:transparent;border:1px solid rgba(0,255,170,.3);border-radius:10px;padding:2px 9px;color:rgba(0,255,170,.6);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">⚡ SMART</button>
       <button id="mcpToggle" onclick="toggleMCP()" style="background:transparent;border:1px solid rgba(247,147,30,.4);border-radius:10px;padding:2px 9px;color:#F7931E;font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .3s;white-space:nowrap">GROQ</button>
     </div>
@@ -730,6 +761,28 @@ canvas{position:fixed;inset:0}
 
 
 
+  <!-- WAR ROOM OVERLAY -->
+  <div id="warRoom">
+    <div class="wr-title">⬢ WAR ROOM</div>
+    <div class="wr-sub">MIWAYZ COLOMBO GTM · JULY 12 2026</div>
+    <div id="wrCountdown"></div>
+    <div class="wr-score-wrap">
+      <div style="text-align:center">
+        <div id="wrScore">--</div>
+        <div id="wrScoreLabel">--</div>
+        <div class="wr-score-caption">LAUNCH READINESS</div>
+      </div>
+    </div>
+    <div class="wr-stats">
+      <div class="wr-stat"><div class="wr-stat-val" id="wrDone">--</div><div class="wr-stat-lbl">DONE</div></div>
+      <div class="wr-stat"><div class="wr-stat-val" id="wrBlocked" style="color:#ff5544">--</div><div class="wr-stat-lbl">BLOCKED</div></div>
+      <div class="wr-stat"><div class="wr-stat-val" id="wrQA">--</div><div class="wr-stat-lbl">IN QA</div></div>
+      <div class="wr-stat"><div class="wr-stat-val" id="wrTodo">--</div><div class="wr-stat-lbl">TO DO</div></div>
+    </div>
+    <div id="wrBlockers"></div>
+    <button class="wr-exit" onclick="toggleWarRoom()">EXIT WAR ROOM</button>
+  </div>
+
   <div id="chatOut"></div>
   <div id="chatTray">
     <button class="sbtn" id="micB" onclick="toggleMic()">MIC</button>
@@ -882,6 +935,8 @@ function revealMainUI(){
   fetchJira().then(()=>{
     setTimeout(()=>{addMsg('ai','');setTimeout(()=>speakAndDisplay(greetingMsg, true),200);},1000);
   });
+  // Start Sentinel background watch
+  if(typeof sentinelOn!=='undefined' && sentinelOn) startSentinel();
 }
 
 /* ── BACKGROUND ── */
@@ -1385,6 +1440,7 @@ function savePinnedState(){
         chartType: w.dataset.chartType || null,
         groupBy: w.dataset.groupBy || null,
         wTitle: w.dataset.wTitle || null,
+        sprints: w.dataset.sprints || null,
       };
     }
   });
@@ -1524,6 +1580,7 @@ function initWidgets(){
         releasenotes: ()=>createReleaseNotesWidget(),
         memory: ()=>createMemoryWidget(),
         jql: ()=>{ if(state.jql) createJQLWidget(state.jql, state.wTitle||state.title||'Saved Query', state.chartType||null, state.groupBy||null, id); },
+        sprinttrend: ()=>{ if(state.sprints) createSprintTrend(JSON.parse(state.sprints), state.chartType||'line', id); },
       };
       if(recreate[state.dynType]){
         setTimeout(()=>{
@@ -1811,6 +1868,64 @@ function createDynWidget(title, bodyHTML, opts={}){
 }
 
 /* ── SPRINT COMPARISON ── */
+/* ── SPRINT TREND (3+ sprints, line chart) ── */
+async function createSprintTrend(sprintNames, chartType, restoreId){
+  chartType = chartType || 'line';
+  addMsg('ai', 'Fetching '+sprintNames.length+' sprints for trend analysis...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='FETCHING';
+
+  try{
+    // Resolve all sprint names to IDs, then fetch stats
+    const found = await Promise.all(sprintNames.map(n =>
+      fetch('/api/sprint/search/'+encodeURIComponent(n)).then(r=>r.json()).catch(()=>({error:true}))
+    ));
+    const valid = found.filter(f=>!f.error && f.id);
+    if(valid.length < 2) throw new Error('Could only find '+valid.length+' of those sprints in Jira.');
+
+    const stats = await Promise.all(valid.map(v =>
+      fetch('/api/sprint/'+v.id).then(r=>r.json())
+    ));
+
+    const labels = valid.map(v=>v.name.replace('MICT ','').replace('Sprint ','S'));
+    const chartId = 'trendChart'+Date.now();
+
+    const html = `
+      <div style="font-size:8px;color:var(--text-dim);margin-bottom:8px;letter-spacing:1px">${valid.length} SPRINTS · DONE% / BLOCKED / TOTAL</div>
+      <div class="chart-wrap"><canvas id="${chartId}"></canvas></div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:8px;color:var(--text-dim)">
+        ${stats.map((d,i)=>`<div style="text-align:center"><div style="color:var(--orange);font-family:'Orbitron',monospace;font-size:13px">${d.donePercent||0}%</div><div>${labels[i]}</div></div>`).join('')}
+      </div>`;
+
+    const wid = createDynWidget('Sprint Trend · '+labels[0]+'→'+labels[labels.length-1], html, {width:420, dynType:'sprinttrend', fixedId:restoreId});
+    setTimeout(()=>{
+      const el = document.getElementById(wid);
+      if(el){ el.dataset.sprints = JSON.stringify(sprintNames); el.dataset.chartType = chartType; }
+      const ctx = document.getElementById(chartId);
+      if(ctx && typeof Chart !== 'undefined'){
+        new Chart(ctx, {
+          type: chartType==='bar' ? 'bar' : 'line',
+          data:{
+            labels,
+            datasets:[
+              {label:'Done %', data:stats.map(d=>d.donePercent||0), borderColor:'#00ffaa', backgroundColor:chartType==='bar'?'rgba(0,255,170,.5)':'rgba(0,255,170,.08)', tension:.35, fill:chartType!=='bar', pointBackgroundColor:'#00ffaa'},
+              {label:'Blocked', data:stats.map(d=>d.blocked||0), borderColor:'#ff5544', backgroundColor:chartType==='bar'?'rgba(255,85,68,.5)':'rgba(255,85,68,.06)', tension:.35, fill:false, pointBackgroundColor:'#ff5544'},
+              {label:'Total', data:stats.map(d=>d.total||0), borderColor:'#0CA6D5', backgroundColor:chartType==='bar'?'rgba(12,166,213,.4)':'rgba(12,166,213,.05)', tension:.35, fill:false, pointBackgroundColor:'#0CA6D5', borderDash:chartType==='bar'?[]:[4,3]},
+            ]
+          },
+          options:{responsive:true,plugins:{legend:{labels:{color:'rgba(247,147,30,.7)',font:{size:9}}}},
+            scales:{x:{ticks:{color:'rgba(12,166,213,.6)'},grid:{color:'rgba(247,147,30,.06)'}},y:{ticks:{color:'rgba(12,166,213,.6)'},grid:{color:'rgba(247,147,30,.06)'}}}}
+        });
+      }
+    },250);
+
+    const first = stats[0], last = stats[stats.length-1];
+    const dir = (last.donePercent||0) >= (first.donePercent||0) ? 'trending up' : 'trending down';
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay('Trend ready across '+valid.length+' sprints. Completion is '+dir+', from '+(first.donePercent||0)+' percent in '+valid[0].name+' to '+(last.donePercent||0)+' percent in '+valid[valid.length-1].name+'.', false),100);
+  }catch(e){ addMsg('ai','Sprint trend failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
 async function createSprintCompare(s1name, s2name){
   addMsg('ai', `Fetching data for ${s1name} and ${s2name}...`);
   orbState='thinking'; document.getElementById('orbStatusText').textContent='FETCHING';
@@ -2386,6 +2501,189 @@ function isJiraUpdateCommand(text){
   return jiraUpdatePatterns.some(p => p.test(text));
 }
 
+/* ── SENTINEL MODE ── */
+// MIRA proactively watches Jira and speaks up when something changes
+var sentinelOn = true;
+var sentinelTimer = null;
+var sentinelFirstPoll = true;
+
+function toggleSentinel(){
+  sentinelOn = !sentinelOn;
+  const btn = document.getElementById('sentinelToggle');
+  if(btn){
+    btn.style.color = sentinelOn ? 'rgba(0,255,170,.7)' : 'rgba(255,255,255,.25)';
+    btn.style.borderColor = sentinelOn ? 'rgba(0,255,170,.35)' : 'rgba(255,255,255,.12)';
+    btn.textContent = sentinelOn ? '👁 SENTINEL' : '👁 OFF';
+  }
+  addMsg('ai', sentinelOn ? 'Sentinel mode active. I will watch the sprint and alert you when things change.' : 'Sentinel mode off. I will stay quiet unless you ask.');
+  if(sentinelOn) startSentinel(); else stopSentinel();
+}
+
+function startSentinel(){
+  stopSentinel();
+  // First poll after 30s (establishes baseline), then every 5 min
+  sentinelTimer = setInterval(pollSentinel, 5*60*1000);
+  setTimeout(pollSentinel, 30*1000);
+}
+function stopSentinel(){ if(sentinelTimer){ clearInterval(sentinelTimer); sentinelTimer=null; } }
+
+async function pollSentinel(){
+  if(!sentinelOn) return;
+  try{
+    const res = await fetch('/api/sentinel');
+    const data = await res.json();
+    if(data.error || data.firstRun) return; // baseline established silently
+
+    const alerts = data.alerts||[];
+    if(alerts.length===0) return;
+
+    // High severity alerts get spoken; others just appear in chat
+    const high = alerts.filter(a=>a.severity==='high');
+    const rest = alerts.filter(a=>a.severity!=='high');
+
+    // Flash the orb to signal proactive alert
+    const orbEl = document.getElementById('orbStatusText');
+    if(orbEl && high.length) orbEl.textContent = 'ALERT';
+
+    rest.forEach(a=>{
+      const icon = a.severity==='positive' ? '🟢' : a.severity==='medium' ? '🟡' : 'ℹ️';
+      addMsg('ai', icon+' SENTINEL: '+a.message);
+    });
+
+    if(high.length){
+      const spoken = high.map(a=>a.message).join(' Also, ');
+      addMsg('ai','');
+      setTimeout(()=>speakAndDisplay('Heads up. '+spoken, false), 200);
+    }
+  }catch(e){ console.warn('Sentinel poll failed:', e.message); }
+}
+
+/* ── WAR ROOM MODE ── */
+var warRoomOn = false;
+var warRoomTimer = null;
+
+function toggleWarRoom(){
+  warRoomOn = !warRoomOn;
+  const wr = document.getElementById('warRoom');
+  if(!wr) return;
+  if(warRoomOn){
+    wr.classList.add('open');
+    updateWarRoom();
+    warRoomTimer = setInterval(updateWarRoom, 1000);
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay('War room active. All eyes on July 12.', true), 300);
+  } else {
+    wr.classList.remove('open');
+    if(warRoomTimer){ clearInterval(warRoomTimer); warRoomTimer=null; }
+  }
+}
+
+function launchReadinessScore(d){
+  if(!d || !d.total) return {score:0, label:'NO DATA', color:'#666'};
+  const done = d.donePercent||0;
+  const blockedPct = d.total ? ((d.blocked||0)/d.total)*100 : 0;
+  const days = Math.max(0, Math.ceil((new Date('2026-07-12')-new Date())/864e5));
+  // Simple model: completion weight 70%, blocker penalty, time pressure
+  let score = done*0.9 - blockedPct*2.5 + Math.min(days,20)*0.8;
+  score = Math.round(Math.max(0, Math.min(100, score)));
+  const label = score>=70 ? 'ON TRACK' : score>=45 ? 'AT RISK' : 'CRITICAL';
+  const color = score>=70 ? '#00ffaa' : score>=45 ? '#F7931E' : '#ff5544';
+  return {score, label, color};
+}
+
+function updateWarRoom(){
+  const now = new Date();
+  const gtm = new Date('2026-07-12T00:00:00');
+  let diff = Math.max(0, gtm - now);
+  const days = Math.floor(diff/864e5); diff -= days*864e5;
+  const hrs = Math.floor(diff/36e5); diff -= hrs*36e5;
+  const mins = Math.floor(diff/6e4); diff -= mins*6e4;
+  const secs = Math.floor(diff/1e3);
+  const pad = n => String(n).padStart(2,'0');
+
+  const cd = document.getElementById('wrCountdown');
+  if(cd) cd.innerHTML = `<span class="wr-num">${pad(days)}</span><span class="wr-unit">D</span><span class="wr-num">${pad(hrs)}</span><span class="wr-unit">H</span><span class="wr-num">${pad(mins)}</span><span class="wr-unit">M</span><span class="wr-num wr-sec">${pad(secs)}</span><span class="wr-unit">S</span>`;
+
+  const d = liveJira||{};
+  const r = launchReadinessScore(d);
+  const sc = document.getElementById('wrScore');
+  if(sc){ sc.textContent = r.score; sc.style.color = r.color; }
+  const sl = document.getElementById('wrScoreLabel');
+  if(sl){ sl.textContent = r.label; sl.style.color = r.color; }
+
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=v;};
+  set('wrDone',(d.donePercent||0)+'%');
+  set('wrBlocked',d.blocked||0);
+  set('wrQA',(d.inQA||0)+(d.readyForQA||0));
+  set('wrTodo',d.toDo||0);
+
+  const bl = document.getElementById('wrBlockers');
+  if(bl && d.blockedTickets){
+    bl.innerHTML = d.blockedTickets.slice(0,5).map(t=>
+      `<div class="wr-blocker"><span style="color:#ff5544;font-family:'Orbitron',monospace">${t.key}</span><span style="color:rgba(255,255,255,.5);margin-left:8px">${(t.summary||'').substring(0,50)}</span><span style="color:rgba(12,166,213,.6);margin-left:auto">${(t.assignee||'').split(' ')[0]}</span></div>`
+    ).join('') || '<div style="color:#00ffaa;font-size:11px">NO BLOCKERS. CLEAR RUNWAY.</div>';
+  }
+}
+
+/* ── WAKE WORD: "HEY MIRA" ── */
+var wakeWordOn = false;
+var wakeRecognition = null;
+
+function toggleWakeWord(){
+  if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
+    addMsg('ai','Wake word needs Chrome speech recognition, which is not available in this browser.');
+    return;
+  }
+  wakeWordOn = !wakeWordOn;
+  const btn = document.getElementById('wakeToggle');
+  if(btn){
+    btn.style.color = wakeWordOn ? '#F7931E' : 'rgba(255,255,255,.25)';
+    btn.style.borderColor = wakeWordOn ? 'rgba(247,147,30,.4)' : 'rgba(255,255,255,.12)';
+  }
+  if(wakeWordOn){ startWakeListener(); addMsg('ai','Wake word active. Just say "Hey MIRA" followed by your command.'); }
+  else { stopWakeListener(); addMsg('ai','Wake word off.'); }
+}
+
+function startWakeListener(){
+  stopWakeListener();
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  wakeRecognition = new SR();
+  wakeRecognition.continuous = true;
+  wakeRecognition.interimResults = false;
+  wakeRecognition.lang = 'en-US';
+
+  wakeRecognition.onresult = (e)=>{
+    const transcript = e.results[e.results.length-1][0].transcript.trim().toLowerCase();
+    console.log('Wake listener heard:', transcript);
+    // Match hey mira / hey meera / hey mirror (common mishears)
+    const wakeMatch = transcript.match(/hey\s+(mira|meera|mirror|myra)[,.]?\s*(.*)/i);
+    if(wakeMatch){
+      const command = (wakeMatch[2]||'').trim();
+      if(command.length > 2){
+        // Command included in same utterance
+        const inp = document.getElementById('sinp');
+        if(inp){ inp.value = command; send(); }
+      } else {
+        // Just the wake word -- acknowledge and open mic
+        speakBrowser('Yes?');
+        const orbEl = document.getElementById('orbStatusText');
+        if(orbEl) orbEl.textContent = 'LISTENING';
+        setTimeout(()=>{ if(typeof toggleMic==='function' && !micOn) toggleMic(); }, 600);
+      }
+    }
+  };
+  wakeRecognition.onerror = (e)=>{
+    if(e.error==='not-allowed'){ wakeWordOn=false; addMsg('ai','Microphone permission denied. Wake word disabled.'); return; }
+  };
+  wakeRecognition.onend = ()=>{ if(wakeWordOn) setTimeout(()=>{ try{ wakeRecognition.start(); }catch(e){} }, 400); };
+  try{ wakeRecognition.start(); }catch(e){}
+}
+
+function stopWakeListener(){
+  if(wakeRecognition){ wakeWordOn=false; try{ wakeRecognition.onend=null; wakeRecognition.stop(); }catch(e){} wakeRecognition=null; }
+  wakeWordOn = document.getElementById('wakeToggle') ? wakeWordOn : false;
+}
+
 /* ── SCHEDULE DAILY BRIEFING AT 9AM ── */
 function scheduleDailyBriefing(){
   const now = new Date();
@@ -2441,6 +2739,20 @@ async function send(){
     return sendToTeams('sprint');
   }
 
+  // War room keywords
+  const tl_wr = text.toLowerCase();
+  if(tl_wr.includes('war room')||tl_wr.includes('warroom')){
+    inp.value=''; addMsg('user',text);
+    return toggleWarRoom();
+  }
+  if(tl_wr.includes('sentinel on')||tl_wr.includes('enable sentinel')){ inp.value=''; if(!sentinelOn) toggleSentinel(); return; }
+  if(tl_wr.includes('sentinel off')||tl_wr.includes('disable sentinel')){ inp.value=''; if(sentinelOn) toggleSentinel(); return; }
+  if(tl_wr.includes('trend')&&/sprint/i.test(text)&&!/\d+\s*(to|-|and)\s*\d+/.test(text)){
+    // "velocity trend" without explicit range -> last 5 sprints ending at current
+    inp.value=''; addMsg('user',text);
+    return createSprintTrend(['Sprint 25','Sprint 26','Sprint 27','Sprint 28','Sprint 29'],'line');
+  }
+
   // Check for Jira update commands first (faster than intent API)
   if(isJiraUpdateCommand(text)){
     inp.value='';
@@ -2455,6 +2767,13 @@ async function send(){
     });
     const intent = await intentRes.json();
 
+    if(intent.intent==='sprint_trend' && intent.sprints?.length>=2){
+      inp.value=''; return createSprintTrend(intent.sprints, intent.chartType||'line');
+    }
+    if(intent.intent==='sprint_compare' && intent.sprints?.length>2){
+      // Classifier said compare but gave 3+ sprints -- that's a trend
+      inp.value=''; return createSprintTrend(intent.sprints, 'line');
+    }
     if(intent.intent==='sprint_compare' && intent.sprints?.length===2){
       inp.value=''; return createSprintCompare(intent.sprints[0], intent.sprints[1]);
     }

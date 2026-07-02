@@ -1,4 +1,5 @@
 const express = require('express');
+const fs = require('fs');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
@@ -788,9 +789,10 @@ app.post('/api/intent', async (req, res) => {
 Classify the user message and respond with JSON only. No explanation.
 
 Intents:
-- sprint_compare: comparing two sprints. Extract sprint names/numbers.
+- sprint_compare: comparing exactly TWO sprints side by side. Extract sprint names.
+- sprint_trend: trend/history/line chart across THREE OR MORE sprints, or a range like "sprints 25 to 29", or "last N sprints". Expand ranges into the full list. Extract chartType if mentioned (line/bar), default line.
 - jql_widget: custom Jira filter or query. Generate the JQL.
-- chart_widget: wants a chart. Generate JQL and chart type (pie/bar/donut).
+- chart_widget: wants a chart of CURRENT sprint tickets. Generate JQL and chart type (pie/bar/donut).
 - standup: wants standup report or daily standup.
 - burndown: wants burndown chart for current sprint.
 - briefing: wants morning briefing or daily briefing.
@@ -798,6 +800,9 @@ Intents:
 
 Examples:
 "compare sprint 27 and 28" -> {"intent":"sprint_compare","sprints":["Sprint 27","Sprint 28"]}
+"line chart based on sprints 25 to 29" -> {"intent":"sprint_trend","sprints":["Sprint 25","Sprint 26","Sprint 27","Sprint 28","Sprint 29"],"chartType":"line"}
+"velocity trend last 5 sprints" -> {"intent":"sprint_trend","sprints":["Sprint 25","Sprint 26","Sprint 27","Sprint 28","Sprint 29"],"chartType":"line"}
+"show sprint history 26 to 29 as bars" -> {"intent":"sprint_trend","sprints":["Sprint 26","Sprint 27","Sprint 28","Sprint 29"],"chartType":"bar"}
 "show blocked tickets for Jaliya" -> {"intent":"jql_widget","jql":"project=MICT AND sprint = 1355 AND status=Blocked AND assignee='Jaliya Lamahewa'","title":"Blocked - Jaliya"}
 "show me a pie chart of ticket status" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"pie","groupBy":"status","title":"Sprint Status"}
 "bar chart of tickets by assignee" -> {"intent":"chart_widget","jql":"project=MICT AND sprint = 1355","chartType":"bar","groupBy":"assignee","title":"Tickets by Assignee"}
@@ -990,6 +995,408 @@ Have a productive day.`
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+/* ── MIRA MEMORY ── */
+// Stores decisions, notes and context across sessions in memory.json
+const MEMORY_FILE = path.join(__dirname, 'mira-memory.json');
+
+function loadMemory() {
+  try {
+    if (fs.existsSync(MEMORY_FILE)) return JSON.parse(fs.readFileSync(MEMORY_FILE, 'utf8'));
+  } catch(e) {}
+  return { decisions: [], notes: [], context: [], createdAt: new Date().toISOString() };
+}
+
+function saveMemory(mem) {
+  try { fs.writeFileSync(MEMORY_FILE, JSON.stringify(mem, null, 2)); } catch(e) {}
+}
+
+app.get('/api/memory', (req, res) => res.json(loadMemory()));
+
+app.post('/api/memory', (req, res) => {
+  const { type, content, tags } = req.body;
+  if (!content) return res.status(400).json({ error: 'content required' });
+  const mem = loadMemory();
+  const entry = {
+    id: Date.now(),
+    type: type || 'note',
+    content,
+    tags: tags || [],
+    createdAt: new Date().toISOString()
+  };
+  if (!mem[type+'s']) mem[type+'s'] = [];
+  mem[type+'s'].unshift(entry);
+  // Keep last 100 of each type
+  if (mem[type+'s'].length > 100) mem[type+'s'] = mem[type+'s'].slice(0, 100);
+  saveMemory(mem);
+  res.json({ success: true, entry });
+});
+
+app.delete('/api/memory/:id', (req, res) => {
+  const mem = loadMemory();
+  ['decisions','notes','context'].forEach(k => {
+    if (mem[k]) mem[k] = mem[k].filter(e => e.id !== parseInt(req.params.id));
+  });
+  saveMemory(mem);
+  res.json({ success: true });
+});
+
+/* ── RELEASE NOTES GENERATOR ── */
+app.get('/api/release-notes', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  if (!process.env.GROQ_API_KEY) return res.status(500).json({ error: 'Groq not configured' });
+
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+
+  try {
+    // Get active sprint
+    const sprintData = await fetch(`${base}/rest/agile/1.0/board/154/sprint?state=active`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    }).then(r=>r.json());
+    const sprint = sprintData.values?.[0];
+    if (!sprint) return res.status(404).json({ error: 'No active sprint' });
+
+    // Get done tickets
+    const data = await fetch(`${base}/rest/agile/1.0/sprint/${sprint.id}/issue?maxResults=200&fields=summary,status,issuetype,assignee,labels,components`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    }).then(r=>r.json());
+
+    const done = (data.issues||[]).filter(i => bucketForStatus(i.fields?.status?.name||'') === 'done');
+    if (done.length === 0) return res.json({ notes: 'No completed tickets in this sprint yet.', sprint: sprint.name });
+
+    const ticketList = done.map(i => i.key + ': ' + (i.fields.summary||'') + ' [' + (i.fields.issuetype?.name||'Task') + ']').join('\n');
+
+    // Use Groq to generate release notes
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 800,
+        temperature: 0.4,
+        messages: [{
+          role: 'system',
+          content: 'You are a product manager writing release notes for MiWayz, a Sri Lankan ride-hailing app. Write concise, professional release notes grouped by feature area (Driver App, Passenger App, Admin Portal, Backend, Bug Fixes). Use plain text, no markdown asterisks. Keep each item to one line. Start with a brief summary sentence.'
+        }, {
+          role: 'user',
+          content: `Write release notes for ${sprint.name}. Completed tickets:
+${ticketList}`
+        }]
+      })
+    }).then(r=>r.json());
+
+    const notes = groqRes.choices?.[0]?.message?.content || 'Could not generate release notes.';
+    res.json({ notes, sprint: sprint.name, ticketCount: done.length });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── MEETING NOTES TO JIRA ── */
+app.post('/api/meeting-notes', async (req, res) => {
+  const { notes } = req.body;
+  if (!notes) return res.status(400).json({ error: 'notes required' });
+  if (!process.env.GROQ_API_KEY) return res.status(500).json({ error: 'Groq not configured' });
+
+  try {
+    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1000,
+        temperature: 0.2,
+        messages: [{
+          role: 'system',
+          content: `Extract action items from meeting notes for MiWayz team. Return JSON only, no explanation.
+Format: {"tickets": [{"summary": "ticket title", "type": "Task|Bug|Story", "assignee": "first name or null", "priority": "High|Medium|Low", "description": "brief description"}]}
+Team members: Chathura, Jaliya, Ashfak, Kukeenthan, Sujanthan, Chethana, Husni, Yuvanshan, Sineth, Thanuja, Thajun, Shanilka, Umar, Dilip, Gimantha, Nimeshika.
+Only extract clear action items. Max 10 tickets.`
+        }, {
+          role: 'user',
+          content: notes
+        }]
+      })
+    }).then(r=>r.json());
+
+    const raw = groqRes.choices?.[0]?.message?.content || '{"tickets":[]}';
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const parsed = JSON.parse(clean);
+    res.json(parsed);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── CONFLUENCE SEARCH ── */
+app.get('/api/confluence', async (req, res) => {
+  const { q } = req.query;
+  if (!q) return res.status(400).json({ error: 'q parameter required' });
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+
+  try {
+    const cql = encodeURIComponent(`type=page AND space.key=MICT AND text ~ "${q}" ORDER BY lastmodified DESC`);
+    const r = await fetch(`${base}/wiki/rest/api/search?cql=${cql}&limit=5&expand=body.view`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      return res.status(r.status).json({ error: 'Confluence error: ' + r.status, detail: err });
+    }
+    const data = await r.json();
+    const results = (data.results||[]).map(p => ({
+      id: p.content?.id,
+      title: p.content?.title || p.title,
+      url: p.content?._links?.webui ? base + '/wiki' + p.content._links.webui : null,
+      space: p.resultGlobalContainer?.title,
+      excerpt: p.excerpt?.replace(/<[^>]+>/g,'').substring(0,200) || '',
+      lastModified: p.lastModified,
+    }));
+    res.json({ results, total: data.totalSize, query: q });
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+/* ── NATURAL LANGUAGE JIRA UPDATES ── */
+app.post('/api/jira-update', async (req, res) => {
+  const { command, jiraContext } = req.body;
+  if (!command) return res.status(400).json({ error: 'command required' });
+  if (!process.env.GROQ_API_KEY) return res.status(500).json({ error: 'Groq not configured' });
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+
+  // Step 1: Use Groq to parse the natural language command into a Jira action
+  try {
+    const parseRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 300,
+        temperature: 0,
+        messages: [{
+          role: 'system',
+          content: `Parse Jira update commands for MiWayz project (MICT). Return JSON only.
+Actions: update_status, assign, add_comment, update_priority, create_ticket
+Status mappings: done=Done, progress=In Progress, review=Code Review, qa=In QA, readyqa=Ready for QA, blocked=Blocked, todo=To Do
+Assignee first names: Jaliya=Jaliya Lamahewa, Ashfak=Ashfak Khajudeen, Kukeenthan=Kukeenthan Thiyaharasa, Sujanthan=Sujanthan Arputharasu, Chethana=Chethana Jayasinghe, Husni=Husni Faiz, Yuvanshan=Yuvanshan Prabakaran, Sineth=Sineth Sandaruwan, Thanuja=Thanuja Mahendran, Thajun=Thajun Najaah, Umar=Umar Muwahid, Dilip=Dilip Vengadesan
+
+Examples:
+"mark MICT-1358 as done" -> {"action":"update_status","ticket":"MICT-1358","status":"Done"}
+"assign MICT-1400 to Jaliya" -> {"action":"assign","ticket":"MICT-1400","assignee":"Jaliya Lamahewa"}
+"move MICT-1234 to code review" -> {"action":"update_status","ticket":"MICT-1234","status":"Code Review"}
+"add comment to MICT-1500: blocked waiting for API" -> {"action":"add_comment","ticket":"MICT-1500","comment":"blocked waiting for API"}
+"set MICT-1100 priority to high" -> {"action":"update_priority","ticket":"MICT-1100","priority":"High"}
+"create task: fix login bug assigned to Husni" -> {"action":"create_ticket","summary":"fix login bug","type":"Bug","assignee":"Husni Faiz","priority":"High"}`
+        }, {
+          role: 'user',
+          content: command
+        }]
+      })
+    }).then(r=>r.json());
+
+    const raw = parseRes.choices?.[0]?.message?.content?.trim() || '{}';
+    const clean = raw.replace(/```json|```/g,'').trim();
+    const action = JSON.parse(clean);
+    console.log('Jira action parsed:', action);
+
+    if (!action.action) return res.status(400).json({ error: 'Could not parse command', raw });
+
+    // Step 2: Execute the Jira action
+    let result = {};
+
+    if (action.action === 'update_status') {
+      // Get transitions for the ticket
+      const transRes = await fetch(`${base}/rest/api/3/issue/${action.ticket}/transitions`, {
+        headers: { 'Authorization': auth, 'Accept': 'application/json' }
+      }).then(r=>r.json());
+
+      const transition = (transRes.transitions||[]).find(t =>
+        t.name.toLowerCase() === action.status.toLowerCase() ||
+        t.to?.name.toLowerCase() === action.status.toLowerCase()
+      );
+
+      if (!transition) {
+        const available = (transRes.transitions||[]).map(t=>t.name).join(', ');
+        return res.json({ success: false, message: 'Status "'+action.status+'" not found. Available: '+available });
+      }
+
+      await fetch(`${base}/rest/api/3/issue/${action.ticket}/transitions`, {
+        method: 'POST',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transition: { id: transition.id } })
+      });
+      result = { success: true, message: action.ticket + ' moved to ' + action.status };
+    }
+
+    else if (action.action === 'assign') {
+      // Find account ID by display name
+      const userRes = await fetch(`${base}/rest/api/3/user/search?query=${encodeURIComponent(action.assignee)}&maxResults=5`, {
+        headers: { 'Authorization': auth, 'Accept': 'application/json' }
+      }).then(r=>r.json());
+
+      const user = (userRes||[]).find(u =>
+        u.displayName?.toLowerCase().includes(action.assignee.split(' ')[0].toLowerCase())
+      );
+
+      if (!user) return res.json({ success: false, message: 'User "'+action.assignee+'" not found in Jira.' });
+
+      await fetch(`${base}/rest/api/3/issue/${action.ticket}`, {
+        method: 'PUT',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { assignee: { accountId: user.accountId } } })
+      });
+      result = { success: true, message: action.ticket + ' assigned to ' + user.displayName };
+    }
+
+    else if (action.action === 'add_comment') {
+      await fetch(`${base}/rest/api/3/issue/${action.ticket}/comment`, {
+        method: 'POST',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: { type:'doc', version:1, content:[{ type:'paragraph', content:[{ type:'text', text: action.comment }] }] } })
+      });
+      result = { success: true, message: 'Comment added to ' + action.ticket };
+    }
+
+    else if (action.action === 'update_priority') {
+      await fetch(`${base}/rest/api/3/issue/${action.ticket}`, {
+        method: 'PUT',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { priority: { name: action.priority } } })
+      });
+      result = { success: true, message: action.ticket + ' priority set to ' + action.priority };
+    }
+
+    else if (action.action === 'create_ticket') {
+      const body = { fields: {
+        project: { key: 'MICT' },
+        summary: action.summary,
+        issuetype: { name: action.type || 'Task' },
+        priority: { name: action.priority || 'Medium' },
+      }};
+      if (action.description) {
+        body.fields.description = { type:'doc', version:1, content:[{ type:'paragraph', content:[{ type:'text', text: action.description }] }] };
+      }
+      const createRes = await fetch(`${base}/rest/api/3/issue`, {
+        method: 'POST',
+        headers: { 'Authorization': auth, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      }).then(r=>r.json());
+
+      if (createRes.key) result = { success: true, message: 'Created ' + createRes.key + ': ' + action.summary, key: createRes.key };
+      else result = { success: false, message: 'Create failed: ' + JSON.stringify(createRes.errors||createRes) };
+    }
+
+    // Save successful updates to MIRA memory
+    if (result.success) {
+      const mem = loadMemory();
+      if (!mem.context) mem.context = [];
+      mem.context.unshift({
+        id: Date.now(),
+        type: 'context',
+        content: result.message + ' (via voice command: "' + command + '")',
+        createdAt: new Date().toISOString()
+      });
+      if (mem.context.length > 50) mem.context = mem.context.slice(0, 50);
+      saveMemory(mem);
+    }
+
+    res.json({ ...result, action });
+  } catch(err) {
+    console.error('Jira update error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ── SENTINEL MODE ── */
+// Compares current sprint state to last snapshot and returns proactive alerts
+const SENTINEL_FILE = path.join(__dirname, 'mira-sentinel.json');
+
+function loadSentinelSnapshot() {
+  try { if (fs.existsSync(SENTINEL_FILE)) return JSON.parse(fs.readFileSync(SENTINEL_FILE, 'utf8')); } catch(e) {}
+  return null;
+}
+function saveSentinelSnapshot(snap) {
+  try { fs.writeFileSync(SENTINEL_FILE, JSON.stringify(snap)); } catch(e) {}
+}
+
+app.get('/api/sentinel', async (req, res) => {
+  if (!process.env.JIRA_API_TOKEN) return res.status(500).json({ error: 'Jira not configured' });
+  const base = process.env.JIRA_BASE_URL;
+  const auth = 'Basic ' + Buffer.from(`${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`).toString('base64');
+
+  try {
+    const sprintData = await fetch(`${base}/rest/agile/1.0/board/154/sprint?state=active`, {
+      headers: { 'Authorization': auth, 'Accept': 'application/json' }
+    }).then(r=>r.json());
+    const sprint = sprintData.values?.[0];
+    if (!sprint) return res.json({ alerts: [] });
+
+    // Fetch all sprint issues (paginated)
+    let all = [], startAt = 0;
+    while (true) {
+      const page = await fetch(`${base}/rest/agile/1.0/sprint/${sprint.id}/issue?startAt=${startAt}&maxResults=100&fields=summary,status,assignee`, {
+        headers: { 'Authorization': auth, 'Accept': 'application/json' }
+      }).then(r=>r.json());
+      all = all.concat(page.issues||[]);
+      if (all.length >= (page.total||0) || !(page.issues||[]).length) break;
+      startAt += 100;
+    }
+
+    // Build current state map
+    const current = {};
+    all.forEach(i => {
+      current[i.key] = {
+        status: i.fields?.status?.name || '',
+        bucket: bucketForStatus(i.fields?.status?.name || ''),
+        assignee: i.fields?.assignee?.displayName?.split(' ')[0] || 'Unassigned',
+        summary: (i.fields?.summary || '').substring(0, 60),
+      };
+    });
+
+    const prev = loadSentinelSnapshot();
+    const alerts = [];
+
+    if (prev && prev.sprintId === sprint.id) {
+      const prevMap = prev.issues || {};
+      let newlyDone = 0;
+
+      Object.entries(current).forEach(([key, cur]) => {
+        const old = prevMap[key];
+        if (!old) {
+          alerts.push({ severity:'info', type:'new_ticket', message: key+' was added to the sprint: '+cur.summary });
+          return;
+        }
+        if (old.bucket !== 'blocked' && cur.bucket === 'blocked') {
+          alerts.push({ severity:'high', type:'new_blocker', message: key+' just moved to Blocked. Assignee: '+cur.assignee+'. '+cur.summary });
+        }
+        if (old.bucket === 'blocked' && cur.bucket !== 'blocked') {
+          alerts.push({ severity:'info', type:'unblocked', message: key+' is unblocked and now in '+cur.status+'.' });
+        }
+        if (old.bucket !== 'done' && cur.bucket === 'done') newlyDone++;
+        // QA bounce detection: was in QA-ish state, moved back to dev
+        const qaStates = ['inQA','readyForQA','codeReview'];
+        if (qaStates.includes(old.bucket) && ['inProgress','toDo'].includes(cur.bucket)) {
+          alerts.push({ severity:'medium', type:'qa_bounce', message: key+' bounced back from '+old.status+' to '+cur.status+'. Assignee: '+cur.assignee+'.' });
+        }
+      });
+
+      if (newlyDone >= 3) alerts.push({ severity:'positive', type:'momentum', message: newlyDone+' tickets completed since last check. Good momentum.' });
+      else if (newlyDone > 0) alerts.push({ severity:'info', type:'progress', message: newlyDone+' ticket'+(newlyDone>1?'s':'')+' moved to Done.' });
+    }
+
+    // Save new snapshot
+    saveSentinelSnapshot({ sprintId: sprint.id, sprintName: sprint.name, issues: current, savedAt: new Date().toISOString() });
+
+    // Total blocked right now for context
+    const blockedNow = Object.values(current).filter(c=>c.bucket==='blocked').length;
+    res.json({ alerts, blockedNow, total: all.length, sprint: sprint.name, firstRun: !prev || prev.sprintId !== sprint.id });
+  } catch(err) {
+    console.error('Sentinel error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {
@@ -1017,6 +1424,12 @@ CURRENT SPRINT DATA (${jira.sprintName || 'Sprint 29'}) — from Jira:
 - Top blocked tickets: ${jira.blockedTickets?.slice(0,3).map(t => t.key + ' (' + t.assignee.split(' ')[0] + ')').join(', ') || 'none'}
 ` : `No live Jira data. GTM days remaining: ${Math.max(0,Math.ceil((new Date('2026-07-12')-new Date())/864e5))}`;
 
+  // Load memory for context
+  const mem = loadMemory();
+  const recentDecisions = (mem.decisions||[]).slice(0,5).map(d=>d.content).join('; ');
+  const memContext = recentDecisions ? `
+RECENT DECISIONS: ${recentDecisions}` : '';
+
   return `You are MIRA, an AI command assistant for Thoshan Rathnayake, Product Owner at MiWayz — a Sri Lankan ride-hailing startup launching in Colombo on July 12 2026.
 
 STRICT RULES — follow every one:
@@ -1042,5 +1455,5 @@ CORRECT TEAM ROLES:
 
 ${liveData}
 
-Reply in plain text only. Max 3 sentences. No bullet points unless specifically asked.`;
+Reply in plain text only. Max 3 sentences. No bullet points unless specifically asked.${memContext}`;
 }
