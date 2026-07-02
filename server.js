@@ -356,7 +356,10 @@ app.post('/api/chat', async (req, res) => {
     }
   }
 
-  // Ollama offline fallback
+  // Ollama offline fallback -- skip in hosted/production mode
+  if(process.env.NODE_ENV === 'production'){
+    return res.status(503).json({ error: 'Groq API key not configured. Add GROQ_API_KEY to Fly.io secrets.' });
+  }
   try {
     const response = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: 'POST',
@@ -990,10 +993,11 @@ Have a productive day.`
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => {
-  console.log(`\n  M.I.R.A. command online`);
+  const hosted = process.env.NODE_ENV === 'production';
+  console.log(`\n  M.I.R.A. command online ${hosted ? '[HOSTED · Fly.io]' : '[LOCAL]'}`);
   console.log(`  http://localhost:${PORT}`);
   console.log(`  Brain:       Groq · llama-3.3-70b ${process.env.GROQ_API_KEY ? '✓' : '✗ (add GROQ_API_KEY)'}`);
-  console.log(`  Fallback:    Ollama · ${OLLAMA_MODEL}`);
+  console.log(`  Fallback:    ${hosted ? 'None (hosted mode)' : 'Ollama · ' + OLLAMA_MODEL}`);
   console.log(`  Jira:        ${process.env.JIRA_EMAIL || 'not configured'}`);
   console.log(`  ElevenLabs:  ${process.env.ELEVENLABS_API_KEY ? 'connected ✓' : 'not configured'}`);
   console.log(`  MS Teams:    ${process.env.TEAMS_WEBHOOK_URL ? 'connected ✓' : 'not configured'}\n`);

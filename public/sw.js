@@ -1,5 +1,5 @@
 // M.I.R.A. Service Worker
-const CACHE = 'mira-v1';
+const CACHE = 'mira-v2';
 const OFFLINE_URLS = [
   '/',
   '/index.html',

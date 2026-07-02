@@ -1372,17 +1372,20 @@ function savePinnedState(){
     if(w.classList.contains('pinned-widget')){
       const rect = w.getBoundingClientRect();
       pinned[w.id] = {
-        x: parseInt(w.style.left) || rect.left || 0,
-        y: parseInt(w.style.top) || rect.top || 0,
+        x: parseInt(w.style.left) || Math.round(rect.left) || 0,
+        y: parseInt(w.style.top) || Math.round(rect.top) || 0,
         width: w.offsetWidth || 220,
         minimized: w.classList.contains('minimized'),
+        // Save widget type for dynamic widgets so they can be recreated
+        dynType: w.dataset.dynType || null,
+        title: w.querySelector('.widget-title')?.textContent || '',
       };
     }
   });
   try{
     localStorage.setItem('mira-pinned', JSON.stringify(pinned));
-    console.log('Pinned state saved:', Object.keys(pinned));
-  } catch(e){}
+    console.log('MIRA: Pinned state saved →', Object.keys(pinned).join(', ') || 'none');
+  } catch(e){ console.error('MIRA: Pin save failed', e); }
 }
 
 function togglePin(id){
@@ -1503,6 +1506,21 @@ function initWidgets(){
   });
 
   updateDock();
+
+  // Recreate pinned DYNAMIC widgets (they don't exist in HTML after refresh)
+  Object.entries(pinned).forEach(([id, state])=>{
+    if(id.startsWith('dynW') && state.dynType && !document.getElementById(id)){
+      console.log('MIRA: Recreating pinned dynamic widget', id, state.dynType);
+      const recreate = {
+        standup: ()=>createStandupWidget(),
+        burndown: ()=>createBurndownWidget(),
+        briefing: ()=>runDailyBriefing(),
+        releasenotes: ()=>createReleaseNotesWidget(),
+        memory: ()=>createMemoryWidget(),
+      };
+      if(recreate[state.dynType]) setTimeout(()=>recreate[state.dynType](), 1500);
+    }
+  });
 }
 
 function showWidgets(){
@@ -1732,7 +1750,7 @@ if(typeof Chart !== 'undefined'){
 
 function createDynWidget(title, bodyHTML, opts={}){
   dynWidgetCount++;
-  const id = 'dynW'+dynWidgetCount;
+  const id = opts.fixedId || ('dynW'+dynWidgetCount);
   const vw=window.innerWidth, vh=window.innerHeight;
   // Cascade position
   const x = Math.min(200 + (dynWidgetCount-1)*30, vw-320);
@@ -1741,6 +1759,7 @@ function createDynWidget(title, bodyHTML, opts={}){
   const div = document.createElement('div');
   div.className = 'hud-widget dyn-widget on';
   div.id = id;
+  if(opts.dynType) div.dataset.dynType = opts.dynType;
   div.style.cssText = `left:${x}px;top:${y}px;width:${opts.width||300}px;z-index:27`;
   div.innerHTML = `
     <div class="widget-header" onmousedown="startDrag(event,'${id}')">
@@ -1993,7 +2012,7 @@ async function createStandupWidget(){
       <button onclick="sendToTeams('sprint')" style="background:transparent;border:1px solid rgba(100,140,255,.4);border-radius:3px;padding:4px 10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">POST TO TEAMS</button>
     </div>`;
 
-    createDynWidget('Daily Standup · '+new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}), html, {width:300});
+    createDynWidget('Daily Standup · '+new Date().toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}), html, {width:300, dynType:'standup'});
     addMsg('ai','');
     setTimeout(()=>speakAndDisplay(`Standup ready. ${data.summary}`),100);
   }catch(e){ addMsg('ai','Standup failed: '+e.message); }
@@ -2028,7 +2047,7 @@ async function createBurndownWidget(){
       </div>
       <div class="chart-wrap"><canvas id="${cid}"></canvas></div>`;
 
-    createDynWidget(`Burndown · ${data.sprint}`, html, {width:380});
+    createDynWidget(`Burndown · ${data.sprint}`, html, {width:380, dynType:'burndown'});
 
     setTimeout(()=>{
       const ctx = document.getElementById(cid);
@@ -2102,7 +2121,7 @@ async function runDailyBriefing(auto=false){
         <button onclick="sendToTeams('sprint')" style="background:transparent;border:1px solid rgba(100,140,255,.4);border-radius:3px;padding:4px 10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">TEAMS</button>
       </div>`;
 
-    createDynWidget('Morning Briefing · '+data.date, html, {width:340});
+    createDynWidget('Morning Briefing · '+data.date, html, {width:340, dynType:'briefing'});
 
     // Speak the briefing
     addMsg('ai','');
@@ -2135,7 +2154,7 @@ async function createMemoryWidget(){
     </div>`;
   });
   if(!html.includes('border-bottom')) html += '<div style="font-size:9px;color:var(--text-dim);text-align:center;padding:10px">No memories yet. Save decisions and notes above.</div>';
-  createDynWidget('MIRA Memory', html, {width:320});
+  createDynWidget('MIRA Memory', html, {width:320, dynType:'memory'});
 }
 
 async function saveMemory(type){
