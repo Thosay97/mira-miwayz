@@ -1238,23 +1238,37 @@ var micOn=false,recog=null;
 function toggleMic(){
   const btn=document.getElementById('micB'),wv=document.getElementById('wvWrap');
   if(!micOn){
+    // CRITICAL: Chrome allows only ONE SpeechRecognition at a time.
+    // Suspend the wake listener before grabbing the mic.
+    if(typeof suspendWake==='function') suspendWake();
     micOn=true;orbState='listening';
     document.getElementById('orbStatusText').textContent='LISTENING';
     btn.classList.add('on');btn.textContent='STOP';wv.classList.add('on');
     if('webkitSpeechRecognition' in window||'SpeechRecognition' in window){
       const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
       recog=new SR();recog.lang='en-US';recog.continuous=false;recog.interimResults=false;
-      recog.onresult=e=>{document.getElementById('sinp').value=e.results[0][0].transcript;stopMic();setTimeout(send,200)};
-      recog.onerror=()=>stopMic();recog.onend=()=>stopMic();recog.start();
+      recog.onresult=e=>{
+        const t=e.results[0][0].transcript;
+        console.log('MIRA mic heard:',t);
+        document.getElementById('sinp').value=t;
+        stopMic();setTimeout(send,200);
+      };
+      recog.onerror=(e)=>{console.warn('MIRA mic error:',e.error);stopMic();};
+      recog.onend=()=>stopMic();
+      // Small delay so the wake recognizer fully releases the mic first
+      setTimeout(()=>{try{recog.start();}catch(err){console.warn('MIRA mic start failed:',err.message);stopMic();}},250);
     }else setTimeout(stopMic,4000);
   }else stopMic();
 }
 function stopMic(){
+  const wasOn=micOn;
   micOn=false;orbState='active';
   document.getElementById('orbStatusText').textContent='ONLINE';
-  const btn=document.getElementById('micB');btn.classList.remove('on');btn.textContent='MIC';
-  document.getElementById('wvWrap').classList.remove('on');
-  if(recog)try{recog.stop()}catch(e){}
+  const btn=document.getElementById('micB');if(btn){btn.classList.remove('on');btn.textContent='MIC';}
+  const wv=document.getElementById('wvWrap');if(wv)wv.classList.remove('on');
+  if(recog){try{recog.onend=null;recog.onerror=null;recog.stop();}catch(e){} recog=null;}
+  // Hand the mic back to the wake listener
+  if(wasOn && typeof resumeWake==='function') resumeWake();
 }
 
 /* ── CHAT ── */
@@ -2626,8 +2640,11 @@ function updateWarRoom(){
 }
 
 /* ── WAKE WORD: "HEY MIRA" ── */
+// Single coordinated speech system. Chrome allows only ONE SpeechRecognition
+// instance, so wake listening suspends while push-to-talk has the mic.
 var wakeWordOn = false;
 var wakeRecognition = null;
+var wakeSuspended = false;
 
 function toggleWakeWord(){
   if(!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)){
@@ -2640,12 +2657,18 @@ function toggleWakeWord(){
     btn.style.color = wakeWordOn ? '#F7931E' : 'rgba(255,255,255,.25)';
     btn.style.borderColor = wakeWordOn ? 'rgba(247,147,30,.4)' : 'rgba(255,255,255,.12)';
   }
-  if(wakeWordOn){ startWakeListener(); addMsg('ai','Wake word active. Just say "Hey MIRA" followed by your command.'); }
-  else { stopWakeListener(); addMsg('ai','Wake word off.'); }
+  if(wakeWordOn){
+    startWakeListener();
+    addMsg('ai','Wake word active. Just say "Hey MIRA" followed by your command.');
+  } else {
+    stopWakeListener();
+    addMsg('ai','Wake word off.');
+  }
 }
 
 function startWakeListener(){
-  stopWakeListener();
+  if(wakeRecognition) return; // already running
+  if(micOn) return;           // push-to-talk owns the mic right now
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   wakeRecognition = new SR();
   wakeRecognition.continuous = true;
@@ -2653,35 +2676,67 @@ function startWakeListener(){
   wakeRecognition.lang = 'en-US';
 
   wakeRecognition.onresult = (e)=>{
-    const transcript = e.results[e.results.length-1][0].transcript.trim().toLowerCase();
-    console.log('Wake listener heard:', transcript);
-    // Match hey mira / hey meera / hey mirror (common mishears)
-    const wakeMatch = transcript.match(/hey\s+(mira|meera|mirror|myra)[,.]?\s*(.*)/i);
-    if(wakeMatch){
-      const command = (wakeMatch[2]||'').trim();
+    // Process only NEW results (from resultIndex onward)
+    for(let i=e.resultIndex; i<e.results.length; i++){
+      if(!e.results[i].isFinal) continue;
+      const transcript = e.results[i][0].transcript.trim().toLowerCase();
+      console.log('MIRA wake heard:', transcript);
+      const wakeMatch = transcript.match(/(?:hey|hi|ok)\s+(?:mira|meera|mirror|myra|miro)[,.]?\s*(.*)/i);
+      if(!wakeMatch) continue;
+      const command = (wakeMatch[1]||'').trim();
       if(command.length > 2){
-        // Command included in same utterance
+        console.log('MIRA wake command:', command);
         const inp = document.getElementById('sinp');
         if(inp){ inp.value = command; send(); }
       } else {
-        // Just the wake word -- acknowledge and open mic
+        // Bare wake word -- acknowledge and hand off to push-to-talk
         speakBrowser('Yes?');
-        const orbEl = document.getElementById('orbStatusText');
-        if(orbEl) orbEl.textContent = 'LISTENING';
-        setTimeout(()=>{ if(typeof toggleMic==='function' && !micOn) toggleMic(); }, 600);
+        setTimeout(()=>{ if(!micOn) toggleMic(); }, 700);
       }
     }
   };
+
   wakeRecognition.onerror = (e)=>{
-    if(e.error==='not-allowed'){ wakeWordOn=false; addMsg('ai','Microphone permission denied. Wake word disabled.'); return; }
+    console.warn('MIRA wake error:', e.error);
+    if(e.error==='not-allowed'){
+      wakeWordOn=false; wakeRecognition=null;
+      const btn=document.getElementById('wakeToggle');
+      if(btn){btn.style.color='rgba(255,255,255,.25)';btn.style.borderColor='rgba(255,255,255,.12)';}
+      addMsg('ai','Microphone permission denied. Wake word disabled.');
+    }
+    // 'no-speech' and 'aborted' are normal -- onend handles restart
   };
-  wakeRecognition.onend = ()=>{ if(wakeWordOn) setTimeout(()=>{ try{ wakeRecognition.start(); }catch(e){} }, 400); };
-  try{ wakeRecognition.start(); }catch(e){}
+
+  wakeRecognition.onend = ()=>{
+    wakeRecognition = null;
+    // Auto-restart (Chrome kills continuous recognition ~60s)
+    // unless suspended, disabled, or push-to-talk owns the mic
+    if(wakeWordOn && !wakeSuspended && !micOn){
+      setTimeout(()=>{ if(wakeWordOn && !wakeSuspended && !micOn) startWakeListener(); }, 300);
+    }
+  };
+
+  try{ wakeRecognition.start(); console.log('MIRA wake listener started'); }
+  catch(e){ console.warn('MIRA wake start failed:', e.message); wakeRecognition=null; }
 }
 
 function stopWakeListener(){
-  if(wakeRecognition){ wakeWordOn=false; try{ wakeRecognition.onend=null; wakeRecognition.stop(); }catch(e){} wakeRecognition=null; }
-  wakeWordOn = document.getElementById('wakeToggle') ? wakeWordOn : false;
+  // Note: does NOT touch wakeWordOn -- callers manage the flag
+  if(wakeRecognition){
+    try{ wakeRecognition.onend=null; wakeRecognition.onerror=null; wakeRecognition.stop(); }catch(e){}
+    wakeRecognition = null;
+  }
+}
+
+// Called by toggleMic before it grabs the mic
+function suspendWake(){
+  wakeSuspended = true;
+  stopWakeListener();
+}
+// Called by stopMic when push-to-talk is done
+function resumeWake(){
+  wakeSuspended = false;
+  if(wakeWordOn) setTimeout(()=>{ if(wakeWordOn && !micOn) startWakeListener(); }, 400);
 }
 
 /* ── SCHEDULE DAILY BRIEFING AT 9AM ── */
