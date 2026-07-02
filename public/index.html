@@ -213,10 +213,20 @@ canvas{position:fixed;inset:0}
 .hud-widget.on{opacity:1;pointer-events:all}
 .hud-widget.minimized .widget-body{display:none}
 .hud-widget.maximized{
-  position:fixed!important;top:46px!important;left:20px!important;
-  right:20px!important;bottom:100px!important;width:auto!important;z-index:35;
+  position:fixed!important;
+  top:60px!important;
+  left:50%!important;
+  transform:translateX(-50%)!important;
+  width:min(720px, calc(100vw - 80px))!important;
+  bottom:auto!important;
+  max-height:calc(100vh - 180px)!important;
+  z-index:35;
 }
-.hud-widget.maximized .widget-body{max-height:calc(100vh - 200px);overflow-y:auto}
+.hud-widget.maximized .widget-body{
+  max-height:calc(100vh - 240px);
+  overflow-y:auto;
+}
+.hud-widget.maximized .chart-wrap canvas{max-height:400px!important}
 
 .widget-header{
   display:flex;align-items:center;
@@ -576,6 +586,10 @@ canvas{position:fixed;inset:0}
     <div class="awm-opt" onclick="addWidget('briefing')"><span class="awm-icon">🌅</span><span class="awm-label">MORNING BRIEFING</span></div>
     <div class="awm-opt" onclick="addWidget('standup')"><span class="awm-icon">🎯</span><span class="awm-label">STANDUP REPORT</span></div>
     <div class="awm-opt" onclick="addWidget('burndown')"><span class="awm-icon">📉</span><span class="awm-label">BURNDOWN CHART</span></div>
+    <div class="awm-opt" onclick="addWidget('releasenotes')"><span class="awm-icon">📋</span><span class="awm-label">RELEASE NOTES</span></div>
+    <div class="awm-opt" onclick="addWidget('memory')"><span class="awm-icon">🧠</span><span class="awm-label">MIRA MEMORY</span></div>
+    <div class="awm-opt" onclick="addWidget('confluence')"><span class="awm-icon">🔍</span><span class="awm-label">CONFLUENCE SEARCH</span></div>
+    <div class="awm-opt" onclick="openMeetingNotes()"><span class="awm-icon">📝</span><span class="awm-label">MEETING NOTES</span></div>
     <div class="awm-close" onclick="toggleAddWidget()">CLOSE</div>
   </div>
 
@@ -1356,16 +1370,19 @@ function savePinnedState(){
   const pinned = {};
   document.querySelectorAll('.hud-widget').forEach(w=>{
     if(w.classList.contains('pinned-widget')){
+      const rect = w.getBoundingClientRect();
       pinned[w.id] = {
-        x: parseInt(w.style.left)||0,
-        y: parseInt(w.style.top)||0,
-        width: w.offsetWidth,
+        x: parseInt(w.style.left) || rect.left || 0,
+        y: parseInt(w.style.top) || rect.top || 0,
+        width: w.offsetWidth || 220,
         minimized: w.classList.contains('minimized'),
       };
     }
   });
-  try{ localStorage.setItem('mira-pinned', JSON.stringify(pinned)); }
-  catch(e){}
+  try{
+    localStorage.setItem('mira-pinned', JSON.stringify(pinned));
+    console.log('Pinned state saved:', Object.keys(pinned));
+  } catch(e){}
 }
 
 function togglePin(id){
@@ -1385,13 +1402,18 @@ function togglePin(id){
     savePinnedState();
     addMsg('ai', id.replace('w','') + ' widget unpinned. It will not persist after restart.');
   } else {
-    // Pin
+    // Pin -- force position to be set before saving
     w.classList.add('pinned-widget');
     if(btn){ btn.classList.add('pinned'); btn.title='Unpin widget'; }
     const closeBtn = w.querySelector('.close-btn');
     if(closeBtn) closeBtn.title = 'Unpin first to close';
+    // Ensure position is explicitly set in style
+    if(!w.style.left || w.style.left==='0px') w.style.left = w.getBoundingClientRect().left + 'px';
+    if(!w.style.top || w.style.top==='0px') w.style.top = w.getBoundingClientRect().top + 'px';
     savePinnedState();
-    addMsg('ai', id.replace('w','') + ' widget pinned. Position and state will be saved permanently.');
+    const saved = getPinnedState();
+    const confirmed = saved[id] ? ' Position saved.' : ' (could not save position)';
+    addMsg('ai', id + ' widget pinned.' + confirmed + ' It will restore on next restart.');
   }
 }
 
@@ -1456,15 +1478,18 @@ function initWidgets(){
     // Pinned widgets always restore from pinned state
     if(pinned[id]){
       w.classList.add('pinned-widget','on');
-      w.style.left = pinned[id].x+'px';
-      w.style.top  = pinned[id].y+'px';
-      if(pinned[id].width) w.style.width = pinned[id].width+'px';
+      const px = Math.max(0, Math.min(pinned[id].x, window.innerWidth-100));
+      const py = Math.max(38, Math.min(pinned[id].y, window.innerHeight-100));
+      w.style.left = px+'px';
+      w.style.top  = py+'px';
+      if(pinned[id].width) w.style.width = Math.max(180, pinned[id].width)+'px';
       if(pinned[id].minimized) w.classList.add('minimized');
       // Update pin button appearance
       const btn = document.getElementById('pin_'+id);
       if(btn){ btn.classList.add('pinned'); btn.title='Unpin widget'; }
       const closeBtn = w.querySelector('.close-btn');
       if(closeBtn) closeBtn.title = 'Unpin first to close';
+      console.log('Restored pinned widget:', id, 'at', px, py);
     } else {
       // Non-pinned -- restore from regular saved state
       const pos = saved[id]||positions[id]||{x:20,y:56};
@@ -1645,9 +1670,19 @@ function maximizeWidget(id){
   const w=document.getElementById(id);
   const isMax=w.classList.contains('maximized');
   // Restore any other maximized
-  document.querySelectorAll('.hud-widget.maximized').forEach(ow=>ow.classList.remove('maximized'));
-  if(!isMax){w.classList.add('maximized');w.style.zIndex=35;}
-  else{w.style.zIndex=25;}
+  document.querySelectorAll('.hud-widget.maximized').forEach(ow=>{
+    ow.classList.remove('maximized');
+    scaleFonts(ow, ow.offsetWidth); // restore fonts
+  });
+  if(!isMax){
+    w.classList.add('maximized');
+    w.style.zIndex=35;
+    // Scale fonts up for maximized view
+    setTimeout(()=>scaleFonts(w, Math.min(720, window.innerWidth-80)), 100);
+  } else {
+    w.style.zIndex=25;
+    setTimeout(()=>scaleFonts(w, w.offsetWidth), 100);
+  }
   saveWidgetState();
 }
 
@@ -2076,6 +2111,230 @@ async function runDailyBriefing(auto=false){
   orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
 }
 
+/* ── MIRA MEMORY ── */
+async function createMemoryWidget(){
+  const mem = await fetch('/api/memory').then(r=>r.json());
+  const sections = [
+    { key:'decisions', label:'DECISIONS', icon:'⚡', color:'#F7931E' },
+    { key:'notes', label:'NOTES', icon:'📝', color:'#0CA6D5' },
+    { key:'context', label:'CONTEXT', icon:'🧠', color:'#00ffaa' },
+  ];
+  let html = `<div style="display:flex;gap:6px;margin-bottom:10px">
+    ${['decision','note','context'].map(t=>`<button onclick="saveMemory('${t}')" style="flex:1;background:transparent;border:1px solid rgba(247,147,30,.2);border-radius:4px;padding:5px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px;transition:all .2s" onmouseover="this.style.borderColor='rgba(247,147,30,.5)'" onmouseout="this.style.borderColor='rgba(247,147,30,.2)'">${t.toUpperCase()}</button>`).join('')}
+  </div>`;
+  sections.forEach(s=>{
+    const items = mem[s.key]||[];
+    if(items.length===0) return;
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:8px;color:${s.color};letter-spacing:2px;margin-bottom:5px">${s.icon} ${s.label}</div>
+      ${items.slice(0,5).map(item=>`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid rgba(247,147,30,.06)">
+          <span style="font-size:9px;color:var(--text-dim);flex:1;line-height:1.4">${item.content}</span>
+          <span onclick="deleteMemory(${item.id})" style="font-size:9px;color:rgba(255,80,80,.4);cursor:pointer;margin-left:8px;flex-shrink:0" title="Delete">✕</span>
+        </div>`).join('')}
+    </div>`;
+  });
+  if(!html.includes('border-bottom')) html += '<div style="font-size:9px;color:var(--text-dim);text-align:center;padding:10px">No memories yet. Save decisions and notes above.</div>';
+  createDynWidget('MIRA Memory', html, {width:320});
+}
+
+async function saveMemory(type){
+  const text = prompt('Enter '+type+' to save to MIRA memory:');
+  if(!text || !text.trim()) return;
+  const res = await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type,content:text.trim()})});
+  const data = await res.json();
+  if(data.success){
+    addMsg('ai', type.charAt(0).toUpperCase()+type.slice(1)+' saved to memory.');
+    // Refresh memory widget if open
+    document.querySelectorAll('.hud-widget').forEach(w=>{
+      if(w.querySelector('.widget-title')?.textContent==='MIRA Memory') w.remove();
+    });
+    createMemoryWidget();
+  }
+}
+
+async function deleteMemory(id){
+  await fetch('/api/memory/'+id,{method:'DELETE'});
+  document.querySelectorAll('.hud-widget').forEach(w=>{
+    if(w.querySelector('.widget-title')?.textContent==='MIRA Memory') w.remove();
+  });
+  createMemoryWidget();
+}
+
+/* ── RELEASE NOTES GENERATOR ── */
+async function createReleaseNotesWidget(){
+  addMsg('ai','Generating release notes from completed sprint tickets...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='WRITING';
+  try{
+    const res = await fetch('/api/release-notes');
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    const html = `
+      <div style="font-size:9px;color:var(--text-dim);margin-bottom:10px">${data.sprint} · ${data.ticketCount} completed tickets</div>
+      <div style="font-size:10px;color:var(--text-dim);line-height:1.8;white-space:pre-wrap">${data.notes}</div>
+      <div style="margin-top:12px;display:flex;gap:6px">
+        <button onclick="navigator.clipboard.writeText(document.querySelector('#rn_text').textContent)" style="background:transparent;border:1px solid var(--border-o);border-radius:3px;padding:4px 10px;color:var(--text-dim);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">📋 COPY</button>
+        <button onclick="sendToTeams('custom',document.querySelector('#rn_text').textContent)" style="background:transparent;border:1px solid rgba(100,140,255,.3);border-radius:3px;padding:4px 10px;color:rgba(100,140,255,.7);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">📤 TEAMS</button>
+      </div>`;
+
+    const wid = createDynWidget('Release Notes · '+data.sprint, html, {width:400});
+    // Add id to text for copy
+    setTimeout(()=>{
+      const body = document.getElementById(wid+'_body');
+      if(body){ const pre = body.querySelector('div:nth-child(2)'); if(pre) pre.id='rn_text'; }
+    },100);
+
+    addMsg('ai','');
+    setTimeout(()=>speakAndDisplay('Release notes generated for '+data.sprint+'. '+data.ticketCount+' completed tickets across the sprint.',false),100);
+  }catch(e){ addMsg('ai','Release notes failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── MEETING NOTES TO JIRA ── */
+function openMeetingNotes(){
+  toggleAddWidget();
+  // Create a meeting notes input widget
+  const wid = createDynWidget('Meeting Notes → Jira', `
+    <div style="font-size:9px;color:var(--text-dim);margin-bottom:8px">Paste meeting notes below. MIRA will extract action items and create Jira tickets.</div>
+    <textarea id="meetingNotesInput" style="width:100%;height:120px;background:rgba(0,8,20,.8);border:1px solid rgba(247,147,30,.2);border-radius:4px;color:var(--orange);font-family:'Share Tech Mono',monospace;font-size:10px;padding:8px;resize:vertical;outline:none;letter-spacing:.5px" placeholder="Paste meeting notes here..."></textarea>
+    <button onclick="processMeetingNotes()" style="width:100%;margin-top:8px;background:rgba(247,147,30,.1);border:1px solid rgba(247,147,30,.3);border-radius:4px;padding:8px;color:var(--orange);font-family:'Share Tech Mono',monospace;font-size:10px;cursor:pointer;letter-spacing:2px;transition:all .2s" onmouseover="this.style.background='rgba(247,147,30,.2)'" onmouseout="this.style.background='rgba(247,147,30,.1)'">⚡ EXTRACT ACTION ITEMS</button>
+    <div id="meetingNotesResult" style="margin-top:8px"></div>
+  `, {width:400});
+}
+
+async function processMeetingNotes(){
+  const notes = document.getElementById('meetingNotesInput')?.value?.trim();
+  if(!notes){ addMsg('ai','Please paste your meeting notes first.'); return; }
+  const resultEl = document.getElementById('meetingNotesResult');
+  if(resultEl) resultEl.innerHTML = '<div style="font-size:9px;color:var(--text-dim);text-align:center;padding:10px">Analysing meeting notes...</div>';
+
+  try{
+    const res = await fetch('/api/meeting-notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({notes})});
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+    const tickets = data.tickets||[];
+    if(tickets.length===0){ if(resultEl) resultEl.innerHTML='<div style="font-size:9px;color:var(--text-dim)">No action items found.</div>'; return; }
+
+    const priorityColor = {High:'#ff5544',Medium:'#F7931E',Low:'rgba(12,166,213,.6)'};
+    if(resultEl) resultEl.innerHTML = `
+      <div style="font-size:9px;color:#00ffaa;margin-bottom:8px;letter-spacing:1px">Found ${tickets.length} action items</div>
+      ${tickets.map((t,i)=>`
+        <div style="border:1px solid rgba(247,147,30,.15);border-radius:4px;padding:8px;margin-bottom:6px;background:rgba(247,147,30,.03)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:9px;color:var(--orange);letter-spacing:.5px">${t.type}</span>
+            <span style="font-size:8px;color:${priorityColor[t.priority]||'var(--text-dim)'}">${t.priority||'Medium'}</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">${t.summary}</div>
+          ${t.assignee?`<div style="font-size:8px;color:rgba(12,166,213,.5)">→ ${t.assignee}</div>`:''}
+          <button onclick="createJiraTicket(${i})" data-ticket='${JSON.stringify(t).replace(/'/g,"&#39;")}' style="margin-top:6px;background:transparent;border:1px solid rgba(247,147,30,.2);border-radius:3px;padding:3px 8px;color:rgba(247,147,30,.6);font-family:'Share Tech Mono',monospace;font-size:8px;cursor:pointer;letter-spacing:1px">CREATE IN JIRA</button>
+        </div>`).join('')}
+      <button onclick="createAllJiraTickets()" style="width:100%;margin-top:4px;background:rgba(247,147,30,.1);border:1px solid rgba(247,147,30,.3);border-radius:4px;padding:7px;color:var(--orange);font-family:'Share Tech Mono',monospace;font-size:9px;cursor:pointer;letter-spacing:1.5px">⚡ CREATE ALL IN JIRA</button>`;
+
+    window._meetingTickets = tickets;
+    addMsg('ai', 'Found '+tickets.length+' action items from the meeting notes. Review and create them in Jira.');
+  }catch(e){ if(resultEl) resultEl.innerHTML='<div style="font-size:9px;color:#ff5544">'+e.message+'</div>'; }
+}
+
+async function createJiraTicket(idx){
+  const t = window._meetingTickets?.[idx];
+  if(!t) return;
+  addMsg('ai', 'Creating Jira ticket: '+t.summary+'...');
+  // We use the existing Jira proxy to create via REST API
+  const auth = 'Basic ' + btoa(window._jiraEmail+':'+window._jiraToken);
+  try{
+    const res = await fetch('/jira-proxy?target='+encodeURIComponent('https://miwayz.atlassian.net/rest/api/3/issue'), {
+      method:'POST',
+      headers:{'Authorization':auth,'Content-Type':'application/json','Accept':'application/json'},
+      body:JSON.stringify({fields:{project:{key:'MICT'},summary:t.summary,issuetype:{name:t.type||'Task'},priority:{name:t.priority||'Medium'},description:{type:'doc',version:1,content:[{type:'paragraph',content:[{type:'text',text:t.description||t.summary}]}]}}})
+    });
+    const data = await res.json();
+    if(data.key) addMsg('ai', 'Created '+data.key+': '+t.summary);
+    else addMsg('ai', 'Jira create failed: '+(data.errorMessages?.[0]||JSON.stringify(data.errors)||'Unknown error'));
+  }catch(e){ addMsg('ai','Failed to create ticket: '+e.message); }
+}
+
+async function createAllJiraTickets(){
+  if(!window._meetingTickets?.length) return;
+  addMsg('ai', 'Creating '+window._meetingTickets.length+' Jira tickets...');
+  for(let i=0;i<window._meetingTickets.length;i++){ await createJiraTicket(i); await new Promise(r=>setTimeout(r,300)); }
+  addMsg('ai', 'All action items created in Jira.');
+}
+
+/* ── CONFLUENCE SEARCH ── */
+async function createConfluenceWidget(query){
+  if(!query){
+    query = prompt('Search Confluence:');
+    if(!query) return;
+  }
+  addMsg('ai', 'Searching Confluence for: '+query+'...');
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='SEARCHING';
+  try{
+    const res = await fetch('/api/confluence?q='+encodeURIComponent(query));
+    const data = await res.json();
+    if(data.error) throw new Error(data.error);
+
+    const results = data.results||[];
+    const html = results.length===0
+      ? '<div style="font-size:9px;color:var(--text-dim);text-align:center;padding:20px">No results found in Confluence.</div>'
+      : results.map(r=>`
+        <div style="padding:8px 0;border-bottom:1px solid rgba(247,147,30,.08)">
+          <a href="${r.url||'#'}" target="_blank" style="font-size:10px;color:var(--orange);text-decoration:none;letter-spacing:.5px;display:block;margin-bottom:3px">${r.title}</a>
+          ${r.space?`<span style="font-size:7px;color:rgba(12,166,213,.4);letter-spacing:1px">${r.space}</span>`:''}
+          ${r.excerpt?`<div style="font-size:9px;color:var(--text-dim);margin-top:3px;line-height:1.5">${r.excerpt}...</div>`:''}
+        </div>`).join('');
+
+    createDynWidget('Confluence: '+query, html, {width:380});
+    addMsg('ai', 'Found '+results.length+' Confluence pages for "'+query+'".');
+  }catch(e){ addMsg('ai','Confluence search failed: '+e.message); }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+/* ── NATURAL LANGUAGE JIRA UPDATES ── */
+async function jiraUpdate(command){
+  addMsg('user', command);
+  orbState='thinking'; document.getElementById('orbStatusText').textContent='UPDATING';
+  addMsg('ai','');
+
+  try{
+    const res = await fetch('/api/jira-update',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({command, jiraContext:liveJira})
+    });
+    const data = await res.json();
+
+    if(data.success){
+      const reply = data.message + '. Jira updated successfully.';
+      setTimeout(()=>speakAndDisplay(reply, false), 100);
+      // Refresh Jira data after update
+      setTimeout(()=>fetchJira(), 2000);
+    } else {
+      const reply = 'Could not update Jira: ' + (data.message||data.error||'Unknown error');
+      setTimeout(()=>speakAndDisplay(reply, false), 100);
+    }
+  }catch(e){
+    setTimeout(()=>speakAndDisplay('Jira update failed: '+e.message, false), 100);
+  }
+  orbState='active'; document.getElementById('orbStatusText').textContent='ONLINE';
+}
+
+// Detect Jira update commands
+const jiraUpdatePatterns = [
+  /mark\s+(MICT-\d+)/i,
+  /assign\s+(MICT-\d+)/i,
+  /move\s+(MICT-\d+)/i,
+  /set\s+(MICT-\d+)/i,
+  /add comment to\s+(MICT-\d+)/i,
+  /create\s+(task|bug|story|ticket)/i,
+  /(MICT-\d+)\s+to\s+/i,
+  /(MICT-\d+)\s+is\s+(done|blocked|complete)/i,
+];
+
+function isJiraUpdateCommand(text){
+  return jiraUpdatePatterns.some(p => p.test(text));
+}
+
 /* ── SCHEDULE DAILY BRIEFING AT 9AM ── */
 function scheduleDailyBriefing(){
   const now = new Date();
@@ -2110,6 +2369,9 @@ function addWidget(type){
   if(type==='standup') return createStandupWidget();
   if(type==='burndown') return createBurndownWidget();
   if(type==='briefing') return runDailyBriefing();
+  if(type==='releasenotes') return createReleaseNotesWidget();
+  if(type==='memory') return createMemoryWidget();
+  if(type==='confluence') return createConfluenceWidget();
 }
 
 /* ── INTERCEPT CHAT FOR WIDGET COMMANDS ── */
@@ -2126,6 +2388,12 @@ async function send(){
     if(tl.includes('blocker')) return sendToTeams('blockers');
     if(tl.includes('gtm')||tl.includes('countdown')) return sendToTeams('gtm');
     return sendToTeams('sprint');
+  }
+
+  // Check for Jira update commands first (faster than intent API)
+  if(isJiraUpdateCommand(text)){
+    inp.value='';
+    return jiraUpdate(text);
   }
 
   // Check widget intent
@@ -2148,6 +2416,12 @@ async function send(){
     if(intent.intent==='standup'){ inp.value=''; return createStandupWidget(); }
     if(intent.intent==='burndown'){ inp.value=''; return createBurndownWidget(); }
     if(intent.intent==='briefing'){ inp.value=''; return runDailyBriefing(); }
+    if(intent.intent==='release_notes'){ inp.value=''; return createReleaseNotesWidget(); }
+    if(intent.intent==='memory'){ inp.value=''; return createMemoryWidget(); }
+    if(intent.intent==='save_memory'&&intent.content){ inp.value='';
+      fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:intent.memType||'note',content:intent.content})}).then(()=>addMsg('ai','Saved to memory: '+intent.content));return; }
+    if(intent.intent==='confluence'&&intent.query){ inp.value=''; return createConfluenceWidget(intent.query); }
+    if(intent.intent==='jira_update'&&intent.command){ inp.value=''; return jiraUpdate(intent.command); }
   }catch(e){ /* fallthrough to normal chat */ }
 
   // Normal chat
